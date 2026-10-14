@@ -633,6 +633,7 @@ kbd{display:inline-block;border:1px solid #cbd5e1;border-bottom-width:2px;border
 .sk-tool i{width:10px;height:10px;border-radius:3px;background:var(--c);flex-shrink:0}
 .sk-tool.on{border-color:var(--c);box-shadow:inset 0 0 0 1px var(--c);background:#fff7f7;font-weight:600}
 @media (max-width:880px){.sk-wrap{grid-template-columns:minmax(0,1fr)}}
+#t_night.busy{opacity:.6;cursor:progress}
 </style>
 
 <!-- โหลด Three.js จาก CDN แบบระบุเวอร์ชันแน่นอน (r160) -->
@@ -2242,8 +2243,92 @@ function nightPool() {
   }
   return (_nightPool = { g, ns, lights });
 }
+/* ---------- เปิดโหมดกลางคืนให้ไม่ค้าง ----------
+   กลางคืนมีดวงไฟ 24 ดวง (มีเงา 8) → GPU ต้องสร้าง shader ชุดใหม่ของวัสดุทุกแบบ ซึ่งบนการ์ดจอในตัว (เช่น Intel) ใช้เวลาหลายวินาที
+   และส่วนใหญ่เกิดตอน "วาดครั้งแรก" → ตอนผู้ใช้ว่าง ๆ วาดของแต่ละแบบด้วยแสงกลางคืนลงจุดเดียว 1×1 พิกเซล (ถูกภาพปกติทับทันที มองไม่เห็น)
+   ทีละชิ้น ให้ shader พร้อมไว้ก่อน พอกดโหมดกลางคืนจึงสลับได้ทันที */
+const NIGHT_SHADOW = THREE.BasicShadowMap, DAY_SHADOW = renderer.shadowMap.type; // เงาไฟกลางคืนแบบขอบคม: shader เล็กลงราว 3 เท่า คอมไพล์และวาดเร็วกว่า
+const nightWarm = { seen: new Set(), done: new Set(), queue: [], dirty: true, scene: null, stand: null, lightSig: '' };
+let lastInputT = 0, nightBusy = false;
+for (const ev of ['pointerdown', 'pointerup', 'wheel', 'keydown']) addEventListener(ev, () => (lastInputT = performance.now()), { capture: true, passive: true });
+addEventListener('pointermove', e => { if (e.buttons) lastInputT = performance.now(); }, { capture: true, passive: true });
+const litMat = m => m.isMeshStandardMaterial || m.isMeshLambertMaterial || m.isMeshPhongMaterial || m.isMeshToonMaterial || (m.isShaderMaterial && m.lights);
+function nightWarmCollect() {
+  const w = nightWarm; w.dirty = false;
+  scene.traverse(o => {
+    if (!o.isMesh || !o.material) return;
+    for (const m of [].concat(o.material)) {
+      if (!litMat(m)) continue;
+      const k = m.uuid + (o.isInstancedMesh ? (o.instanceColor ? 'IC' : 'I') : '') + (o.isSkinnedMesh ? 'S' : ''); // วัสดุเดียวกันแต่เป็นแบบ instanced = shader คนละตัว
+      if (!w.seen.has(k)) { w.seen.add(k); w.queue.push({ m, o: new WeakRef(o) }); }
+    }
+  });
+  if (!w.seen.has('bulb')) { w.seen.add('bulb'); w.queue.push({ m: _bulbMat, bulb: true }); }
+}
+function nightWarmScene() {
+  const w = nightWarm, pool = nightPool();
+  if (!w.scene) { w.scene = new THREE.Scene(); w.scene.background = nightSky; w.stand = new THREE.Group(); w.scene.add(w.stand); }
+  // ไฟอื่นในฉาก (ท้องฟ้า ดวงอาทิตย์) จำลองชนิดเดียวกัน — กลางคืนดวงอาทิตย์ไม่มีเงา
+  const others = []; scene.traverseVisible(o => { if (o.isLight && o.parent !== pool.g) others.push(o.type); });
+  if (others.join() !== w.lightSig) { w.lightSig = others.join(); w.stand.clear(); others.forEach(t => w.stand.add(new THREE[t]())); }
+  w.scene.fog = scene.fog; w.scene.environment = scene.environment;
+  return w.scene;
+}
+function nightWarmProxy(q, o) {
+  let p;
+  if (q.bulb) p = new THREE.Mesh(_bulbGeo, _bulbMat);
+  else if (o.isInstancedMesh) { p = new THREE.InstancedMesh(o.geometry, q.m, 1); if (o.instanceColor) p.instanceColor = new THREE.InstancedBufferAttribute(new Float32Array(3).fill(1), 3); }
+  else p = new THREE.Mesh(o.geometry, q.m);
+  p.frustumCulled = false; p.matrixAutoUpdate = false;
+  if (o) { p.castShadow = o.castShadow; p.receiveShadow = o.receiveShadow; p.matrix.copy(o.matrixWorld); }
+  return p;
+}
+// เตรียมทีละชิ้น (force = ทำให้ครบทันที) • คืนค่าจำนวนที่ยังเหลือ
+function nightWarmStep(force) {
+  const w = nightWarm;
+  if (w.dirty) nightWarmCollect();
+  if (!w.queue.length) return 0;
+  const ws = nightWarmScene(), pool = nightPool(), t0 = performance.now();
+  const st = renderer.shadowMap.type, au = renderer.shadowMap.autoUpdate, ac = renderer.autoClear;
+  renderer.shadowMap.type = NIGHT_SHADOW; ws.add(pool.g);
+  try {
+    while (w.queue.length) {
+      const q = w.queue[0], o = q.o?.deref();
+      if (!q.bulb && (!o || !o.parent)) { w.queue.shift(); continue; } // ถูกลบไปแล้ว
+      const p = nightWarmProxy(q, o); ws.add(p);
+      renderer.compile(ws, camera); // หา/สร้าง shader (คอมไพล์เบื้องหลัง ไม่ค้าง)
+      const prog = renderer.properties.get(q.m).currentProgram, key = prog ? prog.id + '|' + Object.keys(p.geometry.attributes).sort().join() : '';
+      if (prog && !w.done.has(key) && (force || prog.isReady())) {
+        renderer.autoClear = false; renderer.shadowMap.autoUpdate = true;
+        renderer.setScissorTest(true); renderer.setScissor(0, 0, 1, 1);
+        renderer.render(ws, camera); // วาดจริง 1 จุด → ไดรเวอร์สร้าง shader ส่วนที่เหลือให้เสร็จ
+        renderer.setScissorTest(false); w.done.add(key);
+        ws.remove(p); if (p.isInstancedMesh) p.dispose(); w.queue.shift();
+        if (!force) break; // ตอนว่าง: วาดเฟรมละ 1 แบบ ไม่ให้สะดุด
+      } else {
+        ws.remove(p); if (p.isInstancedMesh) p.dispose();
+        if (prog && !w.done.has(key)) break; // ยังคอมไพล์อยู่เบื้องหลัง — รอเฟรมหน้า
+        w.queue.shift(); // shader นี้พร้อมแล้ว
+      }
+      if (!force && performance.now() - t0 > 6) break;
+    }
+  } finally {
+    ws.remove(pool.g); renderer.setScissorTest(false);
+    renderer.shadowMap.type = st; renderer.shadowMap.autoUpdate = au; renderer.autoClear = ac;
+  }
+  return w.queue.length;
+}
 function setNight(on) {
+  if (nightBusy) return;
+  if (on && !nightMode && (nightWarm.dirty || nightWarm.queue.length)) {
+    // ยังเตรียมไม่ครบ (เพิ่งเปิดโปรแกรม/เพิ่งเพิ่มของ) → บอกก่อนแล้วค่อยเตรียมที่เหลือ
+    nightBusy = true; $('#t_night')?.classList.add('busy');
+    toast('🌙 กำลังเตรียมแสงกลางคืน… (ครั้งแรกอาจใช้เวลาสักครู่)', { ms: 2500 });
+    setTimeout(() => { try { nightWarmStep(true); } catch (e) { console.warn(e); } nightBusy = false; $('#t_night')?.classList.remove('busy'); setNight(true); }, 60);
+    return;
+  }
   nightMode = on; nightSig = '';
+  renderer.shadowMap.type = on ? NIGHT_SHADOW : DAY_SHADOW;
   scene.background = on ? nightSky : daySky;
   // กลางคืน: ไม่มีเงาแดด และอัปเดตเงาไฟเฉพาะตอนแบบเปลี่ยน (ไม่ต้องคำนวณทุกเฟรม → ลื่น)
   sun.castShadow = !on; renderer.shadowMap.autoUpdate = !on; renderer.shadowMap.needsUpdate = true;
@@ -4966,6 +5051,7 @@ function commit() {
   updateToolbar();
   scheduleStatus();
   if (nightMode) renderer.shadowMap.needsUpdate = true; // เงาไฟกลางคืนตามของที่ย้าย
+  nightWarm.dirty = true; // อาจมีวัสดุใหม่ → เตรียมแสงกลางคืนเพิ่มตอนว่าง
   if (tplPreview) endPreview(true, true);
 }
 function resetHistory() { history.stack = []; history.index = -1; commit(); }
@@ -4996,6 +5082,7 @@ function rebuildAll() {
   state.items.forEach(addItemObject);
   updateRoomHighlight();
   renderOthers();
+  nightWarm.dirty = true;
 }
 function loadState(s, msg) {
   if (tplPreview) { tplPreview = null; renderTplBar(); } // เปิดแบบอื่น = เลิกโหมดลองดู (ผู้เรียกที่ต้องการลองดูต่อจะตั้งค่าใหม่เอง)
@@ -9557,6 +9644,9 @@ function loop(now) {
   updateCompass();
   if (nightMode && now - nightT > 600) { nightT = now; refreshNightLights(); }
   animateWater(now);
+  if (!nightMode && !nightBusy && mode !== 'walk' && !drag && now > 4000 && now - lastInputT > 1500 && (nightWarm.dirty || nightWarm.queue.length)) {
+    try { nightWarmStep(); } catch (e) { nightWarm.queue.length = 0; nightWarm.dirty = false; console.warn('night warm-up', e); }
+  }
   renderer.render(scene, camera);
 }
 
