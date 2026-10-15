@@ -766,6 +766,10 @@ kbd{display:inline-block;border:1px solid #cbd5e1;border-bottom-width:2px;border
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
+import { SSAOPass } from 'three/addons/postprocessing/SSAOPass.js';
+import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
+import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
 
 /* =========================================================
    1) ฟังก์ชันช่วยเหลือทั่วไป
@@ -2418,7 +2422,7 @@ const BWM = {
 Object.values(BWM).forEach(m => (m.userData.cached = true));
 const DOLL_GAP = 2.6; // ระยะยกชั้นตอนแยกชั้น (ม.)
 const DOLL_SIDES = [['n', 'บน'], ['s', 'ล่าง'], ['w', 'ซ้าย'], ['e', 'ขวา']];
-let dollCut = 'auto', dollExT = 0, dollEx = 0, lastVS = 'normal', cutSig = '';
+let dollCutStyle = 'low', dollCut = 'auto', dollExT = 0, dollEx = 0, lastVS = 'normal', cutSig = '';
 const viewHidden = new Set(), cutHidden = new Set(), _edgeGeo = new WeakMap();
 function houseBox() {
   let x0 = 1e9, x1 = -1e9, z0 = 1e9, z1 = -1e9;
@@ -2458,10 +2462,149 @@ function setPlanStyle(s) {
   planStyle = s; viewDirty = true; updateSun(); updateLevelVisibility(); renderViewBar();
   if (s === 'bw') toast('แปลนขาว-ดำ — ผนังทึบ เฟอร์นิเจอร์เป็นลายเส้น ยังลาก/แก้ไขได้ตามปกติ', { ms: 3500 });
 }
+/* ---------- ภาพนำเสนอ: เงานุ่มตามมุมห้อง ใต้เฟอร์นิเจอร์ รอยต่อผนัง-พื้น (Ambient Occlusion) ----------
+   เปิดเฉพาะบ้านตุ๊กตา / แปลนสมจริง (และตอนบันทึกภาพ) — ตอนแก้แบบปกติไม่ใช้ จะได้ไม่หน่วง */
+let aoOn = true; try { aoOn = localStorage.getItem('homeDesigner3D.ao') !== '0'; } catch (e) { }
+let _ao = null;
+const AO_SET = { persp: { radius: 0.9, min: 0.000002, max: 0.005 }, ortho: { radius: 0.6, min: 0.000002, max: 0.004 } }; // ความลึกคิดเป็นสัดส่วนของระยะไกลสุดของกล้อง (500 ม.)
+function aoPipe() {
+  if (_ao) return _ao;
+  const rt = new THREE.WebGLRenderTarget(4, 4, { type: THREE.HalfFloatType, samples: 4 });
+  const composer = new EffectComposer(renderer, rt); composer.setPixelRatio(1);
+  const beauty = new RenderPass(scene, camera), pass = new SSAOPass(scene, camera, 4, 4, 16); // ภาพปกติก่อน แล้วคูณเงานุ่มทับ
+  const sm = pass.ssaoMaterial; sm.fragmentShader = sm.fragmentShader.replace(/gl_FragColor = vec4\( vec3\( 1\.0 - occlusion \), 1\.0 \);/, 'gl_FragColor = vec4( vec3( pow( 1.0 - occlusion, 2.2 ) ), 1.0 );'); sm.needsUpdate = true; // เงาเข้มขึ้นเล็กน้อย
+  composer.addPass(beauty); composer.addPass(pass); composer.addPass(new OutputPass());
+  return (_ao = { composer, beauty, pass, w: 0, h: 0, cam: null });
+}
+const aoActive = () => aoOn && !nightMode && (vstyle() === 'doll' || vstyle() === 'real');
+const _aoCam = { m: new THREE.Matrix4(), p: new THREE.Matrix4(), t: -1e9 };
+function renderFrame(force) {
+  if (!aoActive()) { renderer.render(scene, camera); return; }
+  // ระหว่างหมุน/ซูมกล้องใช้ภาพปกติ (ลื่น) — หยุดนิ่ง 0.25 วินาทีแล้วค่อยเติมเงานุ่ม
+  if (!_aoCam.m.equals(camera.matrixWorld) || !_aoCam.p.equals(camera.projectionMatrix)) { _aoCam.m.copy(camera.matrixWorld); _aoCam.p.copy(camera.projectionMatrix); _aoCam.t = performance.now(); }
+  if (!force && performance.now() - _aoCam.t < 250) { renderer.render(scene, camera); return; }
+  const A = aoPipe(), p = A.pass, size = renderer.getDrawingBufferSize(new THREE.Vector2());
+  if (size.x !== A.w || size.y !== A.h) { A.w = size.x; A.h = size.y; A.composer.setSize(size.x, size.y); }
+  if (A.cam !== camera) {
+    A.cam = camera; p.camera = camera; A.beauty.camera = camera;
+    const persp = camera.isPerspectiveCamera ? 1 : 0;
+    for (const m of [p.ssaoMaterial, p.depthRenderMaterial]) if (m && m.defines && m.defines.PERSPECTIVE_CAMERA !== persp) { m.defines.PERSPECTIVE_CAMERA = persp; m.needsUpdate = true; }
+    const k = persp ? AO_SET.persp : AO_SET.ortho; p.kernelRadius = k.radius; p.minDistance = k.min; p.maxDistance = k.max;
+  }
+  const u = p.ssaoMaterial.uniforms;
+  u.cameraNear.value = camera.near; u.cameraFar.value = camera.far;
+  u.cameraProjectionMatrix.value.copy(camera.projectionMatrix); u.cameraInverseProjectionMatrix.value.copy(camera.projectionMatrixInverse);
+  if (p.depthRenderMaterial?.uniforms.cameraNear) { p.depthRenderMaterial.uniforms.cameraNear.value = camera.near; p.depthRenderMaterial.uniforms.cameraFar.value = camera.far; }
+  A.composer.render();
+}
+// ผนังที่ตัดแบบ "เหลือ 1 ม.": ตัดชิ้นผนังให้เตี้ยลง เห็นหน้าตัดสีไม้ด้านบน (ชิ้นที่อยู่สูงกว่าระดับตัดซ่อนไป)
+const DOLL_LOW = 1.0;
+function wallCutMesh(m, cut, G) {
+  const lm0 = m.userData.lowMesh;
+  if (!cut) { m.visible = true; if (lm0) lm0.visible = false; return; }
+  if (dollCutStyle !== 'low') { m.visible = false; if (lm0) lm0.visible = false; return; }
+  const geo = m.geometry; if (!geo.boundingBox) geo.computeBoundingBox(); const b = geo.boundingBox;
+  if (b.min.y >= DOLL_LOW - 0.01) { m.visible = false; if (lm0) lm0.visible = false; return; }
+  if (b.max.y <= DOLL_LOW + 0.01) { m.visible = true; return; }
+  m.visible = false;
+  let lm = lm0;
+  if (!lm) {
+    const sz = b.getSize(new THREE.Vector3()), c = b.getCenter(new THREE.Vector3()), hh = DOLL_LOW - b.min.y;
+    const g2 = new THREE.BoxGeometry(sz.x, hh, sz.z); g2.translate(c.x, b.min.y + hh / 2, c.z); boxWorldUV(g2, (WALL_TYPES[state.house.wallMat] || WALL_TYPES.paint).span);
+    const mats = [].concat(m.material).slice(); if (mats.length === 6) mats[2] = G.mats[1];
+    lm = new THREE.Mesh(g2, mats.length === 6 ? mats : m.material); lm.castShadow = lm.receiveShadow = true; lm.userData.lowCut = true;
+    m.parent.add(lm); m.userData.lowMesh = lm;
+  }
+  lm.visible = true;
+}
+// ภาพนำเสนอ: เรนเดอร์ความละเอียดสูง + กรอบการ์ดมุมโค้ง ชื่อโครงการ ข้อมูลบ้าน (แบบภาพโฆษณาแอปแต่งบ้าน)
+function exportPoster() {
+  const pr = renderer.getPixelRatio();
+  renderer.setPixelRatio(Math.min(3, Math.max(2, pr * 1.6))); resize();
+  for (let i = 0; i < 2; i++) { updateViewStyle(); updateDollCut(vstyle() === 'doll'); }
+  let img;
+  try { img = renderSnapshot({ noCaption: true }); } finally { renderer.setPixelRatio(pr); resize(); }
+  const vs = vstyle(), dark = vs !== 'bw', bg = vs === 'bw' ? '#f4f2ee' : nightMode ? '#1c2541' : '#6e5d52', fg = dark ? '#ffffff' : '#1f2937', sub = dark ? 'rgba(255,255,255,.78)' : '#4b5563';
+  const W0 = img.width, k = W0 / 1000, pad = Math.round(44 * k), head = Math.round(150 * k), foot = Math.round(84 * k);
+  const c = document.createElement('canvas'); c.width = W0 + pad * 2; c.height = img.height + head + foot; const x = c.getContext('2d');
+  const rr = (X, Y, W, H, r) => { x.beginPath(); x.moveTo(X + r, Y); x.arcTo(X + W, Y, X + W, Y + H, r); x.arcTo(X + W, Y + H, X, Y + H, r); x.arcTo(X, Y + H, X, Y, r); x.arcTo(X, Y, X + W, Y, r); x.closePath(); };
+  x.fillStyle = bg; rr(0, 0, c.width, c.height, Math.round(48 * k)); x.fill();
+  x.save(); rr(pad, head, W0, img.height, Math.round(28 * k)); x.clip(); x.drawImage(img, pad, head); x.restore();
+  const meta = tplMeta(), F = "'IBM Plex Sans Thai', Tahoma, sans-serif";
+  x.fillStyle = fg; x.textBaseline = 'alphabetic';
+  x.font = `700 ${Math.round(46 * k)}px ${F}`; x.fillText(state.project?.name || 'แบบบ้านของฉัน', pad, Math.round(78 * k));
+  x.fillStyle = sub; x.font = `500 ${Math.round(24 * k)}px ${F}`;
+  const info = [`${meta.floors} ชั้น`, `${meta.beds} ห้องนอน`, `${meta.baths} ห้องน้ำ`, `${meta.area} ตร.ม.`, meta.houses > 1 ? `${meta.houses} หลัง` : '', { doll: 'บ้านตุ๊กตา', real: 'ผังมองจากด้านบน', bw: 'แปลนพื้น' }[vs] || 'มุมมอง 3D'].filter(Boolean).join('  ·  ');
+  x.fillText(info, pad, Math.round(120 * k));
+  x.textAlign = 'right'; x.fillStyle = fg; x.font = `700 ${Math.round(26 * k)}px ${F}`; x.fillText('🏠 ออกแบบบ้าน 3D', c.width - pad, Math.round(78 * k));
+  x.fillStyle = sub; x.font = `${Math.round(20 * k)}px ${F}`;
+  x.fillText(new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' }), c.width - pad, c.height - Math.round(34 * k));
+  x.textAlign = 'left'; x.fillText(meta.budget ? `งบก่อสร้างประมาณ ≈ ${(meta.budget / 1e6).toFixed(2)} ล้านบาท (ประเมินเบื้องต้น)` : '', pad, c.height - Math.round(34 * k));
+  c.toBlob(b => { download(b, `ภาพนำเสนอ-${stamp()}.png`); toast('🖼️ บันทึกภาพนำเสนอแล้ว — ส่งให้ลูกค้าได้เลย', { type: 'ok' }); }, 'image/png');
+  return c;
+}
+/* ---------- แปลนขาว-ดำ: เส้นบอกขนาดแบบแบบก่อสร้าง 3 แถวรอบบ้าน ----------
+   แถวใน = ช่องประตู/หน้าต่างบนผนังนอก • แถวกลาง = ขนาดแต่ละห้องตามแนวผนัง • แถวนอก = ขนาดรวม
+   วาดเป็นเส้น + ตัวเลขในฉาก 3D จึงติดไปกับภาพนำเสนอ/PNG ด้วย */
+const bwDimGroup = new THREE.Group(); bwDimGroup.visible = false; scene.add(bwDimGroup);
+let bwDimKey = '', bwDimDirty = true;
+const _dimTex = new Map(), DIM_LINE = new THREE.LineBasicMaterial({ color: '#374151' }), DIM_EXT = new THREE.LineBasicMaterial({ color: '#9ca3af' });
+function dimText(txt, vertical) {
+  let t = _dimTex.get(txt);
+  if (!t) {
+    const c = document.createElement('canvas'), x = c.getContext('2d'), F = "600 44px 'IBM Plex Sans Thai', Tahoma, sans-serif"; x.font = F;
+    const w = Math.ceil(x.measureText(txt).width) + 16; c.width = w; c.height = 60;
+    x.font = F; x.fillStyle = 'rgba(255,255,255,0.92)'; x.fillRect(0, 6, w, 48); x.fillStyle = '#1f2937'; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(txt, w / 2, 31);
+    t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.userData = { aspect: w / 60 }; _dimTex.set(txt, t);
+  }
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true, rotation: vertical ? Math.PI / 2 : 0 }));
+  const hh = 0.3; sp.scale.set(hh * t.userData.aspect, hh, 1); sp.renderOrder = 1010; sp.raycast = () => {};
+  return sp;
+}
+// แถวเส้นบอกขนาดตามแนวด้านหนึ่ง: pts = ตำแหน่งตามแนว, c = ตำแหน่งผนัง, off = ระยะห่างออกนอกผนัง (มีเครื่องหมาย ±)
+function dimChain(pts, axis, c, off, wallC) {
+  pts = [...new Set(pts.map(v => Math.round(v * 1000) / 1000))].sort((a, b) => a - b);
+  if (pts.length < 2) return;
+  const P = (a, o) => axis === 'x' ? new THREE.Vector3(a, 0, o) : new THREE.Vector3(o, 0, a), seg = [], ext = [];
+  const lc = c + off, s = Math.sign(off);
+  seg.push(P(pts[0], lc), P(pts[pts.length - 1], lc));
+  for (const a of pts) {
+    ext.push(P(a, wallC + s * 0.12), P(a, lc + s * 0.12));
+    const tk = 0.11; seg.push(P(a - tk, lc - tk * (axis === 'x' ? 1 : -1)), P(a + tk, lc + tk * (axis === 'x' ? 1 : -1))); // ขีดเฉียง 45°
+  }
+  bwDimGroup.add(new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(seg), DIM_LINE), new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(ext), DIM_EXT));
+  for (let i = 0; i < pts.length - 1; i++) {
+    const L = pts[i + 1] - pts[i]; if (L < 0.2) continue;
+    const sp = dimText(L.toFixed(2), axis === 'z'), m = (pts[i] + pts[i + 1]) / 2, tOff = 0.2 * s;
+    sp.position.copy(P(m, lc + tOff)); if (L < 0.7) sp.scale.multiplyScalar(0.75);
+    bwDimGroup.add(sp);
+  }
+}
+function rebuildBwDims() {
+  bwDimGroup.children.forEach(o => { o.geometry?.dispose(); if (o.isSprite) o.material.dispose(); });
+  bwDimGroup.clear();
+  const L = curLevel, R = lvRect(L), rs = roomsOf(L), e = 0.05;
+  bwDimGroup.position.y = lvBase(L) + 0.06;
+  const sides = [
+    { axis: 'x', c: R.z, sgn: -1, touch: r => Math.abs(r.z - R.z) < e, a: r => [r.x, r.x + r.w], lo: R.x, hi: R.x + R.w, onWall: it => Math.abs(it.z - R.z) < 0.3 },
+    { axis: 'x', c: R.z + R.d, sgn: 1, touch: r => Math.abs(r.z + r.d - R.z - R.d) < e, a: r => [r.x, r.x + r.w], lo: R.x, hi: R.x + R.w, onWall: it => Math.abs(it.z - R.z - R.d) < 0.3 },
+    { axis: 'z', c: R.x, sgn: -1, touch: r => Math.abs(r.x - R.x) < e, a: r => [r.z, r.z + r.d], lo: R.z, hi: R.z + R.d, onWall: it => Math.abs(it.x - R.x) < 0.3 },
+    { axis: 'z', c: R.x + R.w, sgn: 1, touch: r => Math.abs(r.x + r.w - R.x - R.w) < e, a: r => [r.z, r.z + r.d], lo: R.z, hi: R.z + R.d, onWall: it => Math.abs(it.x - R.x - R.w) < 0.3 },
+  ];
+  for (const S of sides) {
+    // ช่องเปิดบนผนังนอกด้านนี้
+    const ops = state.items.filter(it => itemLevel(it) === L && isWallMount(it) && S.onWall(it)).flatMap(it => { const m = S.axis === 'x' ? it.x : it.z; return [m - it.w / 2, m + it.w / 2]; });
+    let row = 0;
+    if (ops.length) { dimChain([S.lo, S.hi, ...ops].filter(v => v >= S.lo - 1e-6 && v <= S.hi + 1e-6), S.axis, S.c, S.sgn * 0.7, S.c); row = 1; }
+    const rp = rs.filter(S.touch).flatMap(S.a).filter(v => v >= S.lo - 1e-6 && v <= S.hi + 1e-6);
+    if (rp.length > 2) { dimChain([S.lo, S.hi, ...rp], S.axis, S.c, S.sgn * (0.7 + row * 0.65), S.c); row++; }
+    dimChain([S.lo, S.hi], S.axis, S.c, S.sgn * (0.7 + row * 0.65), S.c);
+  }
+}
 // ทุกเฟรม: พื้นหลัง กลุ่มที่ซ่อน การแยกชั้น (มีภาพเคลื่อนไหว) และผนังที่ตัด
 function updateViewStyle() {
   const vs = vstyle();
-  if (vs !== lastVS) { lastVS = vs; viewDirty = true; updateSun(); updateLevelVisibility(); renderViewBar(); }
+  if (vs !== lastVS) { lastVS = vs; viewDirty = true; updateSun(); updateLevelVisibility(); renderViewBar(); rebuildLabels(); }
   const bg = vs === 'bw' ? BG_WHITE : nightMode ? nightSky : vs === 'doll' || vs === 'real' ? BG_DOLL : daySky;
   if (scene.background !== bg) scene.background = bg;
   const doll = vs === 'doll';
@@ -2476,6 +2619,9 @@ function updateViewStyle() {
   } else if (dollEx) LV.forEach((g, i) => (g.root.position.y = lvBase(i) + dollEx * DOLL_GAP * i)); // หลังสร้างชั้นใหม่
   if (viewDirty) applyViewStyle(vs);
   updateDollCut(doll);
+  // เส้นบอกขนาดแปลนขาว-ดำ: สร้างใหม่เมื่อแบบเปลี่ยน/เปลี่ยนชั้น
+  const bw = vs === 'bw'; bwDimGroup.visible = bw;
+  if (bw) { const key = curLevel + '|' + state.rooms.length + '|' + state.items.length; if (bwDimDirty || key !== bwDimKey) { bwDimKey = key; bwDimDirty = false; rebuildBwDims(); } }
 }
 function applyViewStyle(vs) {
   viewDirty = false; cutSig = '';
@@ -2538,9 +2684,9 @@ function updateDollCut(doll) {
     const R = lvRect(L);
     return (p.z < R.z ? 'n' : '') + (p.z > R.z + R.d ? 's' : '') + (p.x < R.x ? 'w' : '') + (p.x > R.x + R.w ? 'e' : '');
   });
-  const sig = per.join('|') + '#' + LV.map(G => G.wd.segments.length).join(',');
+  const sig = per.join('|') + '#' + LV.map(G => G.wd.segments.length).join(',') + dollCutStyle;
   if (sig === cutSig) return; cutSig = sig;
-  LV.forEach((G, L) => { for (const sg of G.wd.segments) { const h = !!(sg.ext && per[L].includes(sg.ext)); sg.meshes?.forEach(m => (m.visible = !h)); } });
+  LV.forEach((G, L) => { for (const sg of G.wd.segments) { const h = !!(sg.ext && per[L].includes(sg.ext)); sg.meshes?.forEach(m => wallCutMesh(m, h, G)); } });
   for (const id of cutHidden) { const o = itemObjs.get(id); if (o && !viewHidden.has(id)) o.visible = true; }
   cutHidden.clear();
   if (!doll) return;
@@ -2559,19 +2705,24 @@ function renderViewBar() {
   if (mode === 'walk' || (mode === 'orbit' && !dollOn)) { el.hidden = true; return; }
   el.hidden = false;
   const b = (k, label, on, title = '') => `<button class="vb${on ? ' on' : ''}" data-k="${k}" title="${title}">${label}</button>`;
-  const shot = b('shot', '📷 บันทึกภาพ', false, 'บันทึกภาพมุมนี้เป็นไฟล์ PNG (ไว้ส่งลูกค้า)');
+  const shot = b('poster', '🖼️ ภาพนำเสนอ', false, 'บันทึกภาพสวยพร้อมกรอบ ชื่อโครงการ และข้อมูลบ้าน (ไว้ส่งลูกค้า)') + b('shot', '📷 PNG', false, 'บันทึกภาพมุมนี้เป็นไฟล์ PNG ธรรมดา');
+  const ao = b('ao', '✨ เงานุ่ม', aoOn, 'เงานุ่มตามมุมห้องและใต้เฟอร์นิเจอร์ ให้ภาพดูมีมิติ (ถ้าเครื่องช้า กดปิดได้)');
   if (vs === 'doll') {
     const sides = dollCut === 'auto' || dollCut === 'none' ? '' : dollCut;
     el.innerHTML = `<span class="vl">✂️ ตัดผนัง</span>${b('cut:auto', 'อัตโนมัติ', dollCut === 'auto', 'ตัดผนังด้านที่หันเข้าหากล้อง — หมุนกล้องแล้วเปลี่ยนตามเอง')}${b('cut:none', 'ไม่ตัด', dollCut === 'none', 'แสดงผนังครบทุกด้าน')}`
       + DOLL_SIDES.map(([k, t]) => b('side:' + k, t, sides.includes(k), `ตัดผนังด้าน${t}ของแปลน (เลือกได้หลายด้าน)`)).join('')
-      + `<span class="vsep"></span>${state.levels.length > 1 ? b('explode', dollExT ? '⇣ รวมชั้น' : '⇕ แยกชั้น', !!dollExT, 'ยกชั้นบนขึ้นให้เห็นทุกชั้นพร้อมกัน') : ''}${shot}`;
+      + `<span class="vsep"></span>${b('cs:low', 'เหลือ 1 ม.', dollCutStyle === 'low', 'ผนังด้านที่ตัดเหลือสูง 1 เมตร เห็นหน้าตัดผนัง')}${b('cs:hide', 'ยกออก', dollCutStyle === 'hide', 'เอาผนังด้านที่ตัดออกทั้งแผง')}`
+      + `<span class="vsep"></span>${state.levels.length > 1 ? b('explode', dollExT ? '⇣ รวมชั้น' : '⇕ แยกชั้น', !!dollExT, 'ยกชั้นบนขึ้นให้เห็นทุกชั้นพร้อมกัน') : ''}${ao}${shot}`;
   } else {
-    el.innerHTML = `<span class="vl">แบบแปลน</span>${b('ps:normal', 'ปกติ', planStyle === 'normal', 'แปลนสำหรับแก้ไข (มีกริดและภาพรองแปลน)')}${b('ps:real', 'สมจริง', planStyle === 'real', 'มองจากด้านบนแบบภาพจริง เห็นพื้นและเฟอร์นิเจอร์')}${b('ps:bw', 'ขาว-ดำ', planStyle === 'bw', 'แปลนลายเส้นแบบสถาปนิก')}<span class="vsep"></span>${shot}`;
+    el.innerHTML = `<span class="vl">แบบแปลน</span>${b('ps:normal', 'ปกติ', planStyle === 'normal', 'แปลนสำหรับแก้ไข (มีกริดและภาพรองแปลน)')}${b('ps:real', 'สมจริง', planStyle === 'real', 'มองจากด้านบนแบบภาพจริง เห็นพื้นและเฟอร์นิเจอร์')}${b('ps:bw', 'ขาว-ดำ', planStyle === 'bw', 'แปลนลายเส้นแบบสถาปนิก')}<span class="vsep"></span>${planStyle === 'real' ? ao : ''}${shot}`;
   }
 }
 function onViewBar(e) {
   const k = e.target.closest('.vb')?.dataset.k; if (!k) return;
   if (k === 'shot') { exportPNG(); return; }
+  if (k === 'poster') { exportPoster(); return; }
+  if (k === 'ao') { aoOn = !aoOn; try { localStorage.setItem('homeDesigner3D.ao', aoOn ? '1' : '0'); } catch (e) { } renderViewBar(); return; }
+  if (k.startsWith('cs:')) { dollCutStyle = k.slice(3); renderViewBar(); return; }
   if (k.startsWith('ps:')) { setPlanStyle(k.slice(3)); return; }
   if (k === 'explode') {
     dollExT = dollExT ? 0 : 1; select(null);
@@ -3039,7 +3190,7 @@ function wallMaterial(key, color, baseSpan) {
   return new THREE.MeshStandardMaterial({ color: t.tint ? color : '#ffffff', map, roughness: t.rough ?? .92 });
 }
 function rebuildWalls(only) {
-  viewDirty = true;
+  viewDirty = true; bwDimDirty = true;
   if (only === undefined) { state.levels.forEach((_, L) => rebuildWalls(L)); return; }
   const L = only, G = LV[L]; if (!G) return;
   clearGroup(G.walls);
@@ -5931,7 +6082,7 @@ function rebuildLabels() {
   roomLabels.forEach(l => l.el.remove()); dimLabels.forEach(l => l.el.remove());
   // แสดงเฉพาะห้องของชั้นที่กำลังแก้ไข
   roomLabels = roomsOf(curLevel).map(r => {
-    const L = makeLabel('rlabel', `<b>${esc(r.name)}</b>${(r.w * r.d).toFixed(1)} ตร.ม.`, new THREE.Vector3(r.x + r.w / 2, lvBase(curLevel) + 0.1, r.z + r.d / 2));
+    const L = makeLabel('rlabel', `<b>${esc(r.name)}</b>${(r.w * r.d).toFixed(1)} ตร.ม.${vstyle() === 'bw' ? ` · ${r.w.toFixed(2)}×${r.d.toFixed(2)} ม.` : ''}`, new THREE.Vector3(r.x + r.w / 2, lvBase(curLevel) + 0.1, r.z + r.d / 2));
     L.roomId = r.id; return L;
   });
   const R = lvRect(curLevel), y = lvBase(curLevel) + 0.02;
@@ -6093,7 +6244,7 @@ function commit() {
   updateToolbar();
   scheduleStatus();
   if (nightMode) renderer.shadowMap.needsUpdate = true; // เงาไฟกลางคืนตามของที่ย้าย
-  nightWarm.dirty = true; // อาจมีวัสดุใหม่ → เตรียมแสงกลางคืนเพิ่มตอนว่าง
+  nightWarm.dirty = true; bwDimDirty = true; // อาจมีวัสดุใหม่ → เตรียมแสงกลางคืนเพิ่มตอนว่าง • เส้นบอกขนาดแปลนตามแบบใหม่
   if (tplPreview) endPreview(true, true);
 }
 function resetHistory() { history.stack = []; history.index = -1; commit(); }
@@ -6205,6 +6356,8 @@ viewport.addEventListener('pointerdown', e => {
     const r = $('#selRect'); r.hidden = false; r.style.cssText = `left:${e.clientX - viewport.getBoundingClientRect().left}px;top:${e.clientY - viewport.getBoundingClientRect().top}px;width:0;height:0`;
     return;
   }
+  const rh = pickRoomHandle(e.clientX, e.clientY);
+  if (rh) { startRoomResize(rh); return; } // ลากจุดสีน้ำเงินรอบห้อง = ปรับขนาดห้อง
   const hd = pickHandle(e.clientX, e.clientY);
   if (hd?.rotate) { startRotate(selectedItem()); return; } // ลากจุดจับสีน้ำเงิน = หมุน
   if (hd) { startResize(hd, selectedItem()); return; } // ลากจุดจับ = ปรับขนาด
@@ -6254,6 +6407,7 @@ window.addEventListener('pointermove', e => {
   }
   else if (drag?.kind === 'resize') resizeTo(e.clientX, e.clientY);
   else if (drag?.kind === 'rotate') rotateTo(e.clientX, e.clientY, e.shiftKey);
+  else if (drag?.kind === 'roomSize') roomResizeTo(e.clientX, e.clientY, e.shiftKey);
   else if (drag?.kind === 'item' && down?.moved) dragItemTo(e.clientX, e.clientY);
   else if (drag?.kind === 'room') {
     const p = floorPoint(e.clientX, e.clientY); if (!p) return;
@@ -6306,6 +6460,11 @@ function onPointerEnd(e, cancelled) {
   }
   if (drag?.kind === 'multi') { const moved = drag.moved; drag = null; activeControls().enabled = true; if (moved) commit(); return; }
   if (drag?.kind === 'other') { const mv = drag.moved; drag = null; activeControls().enabled = true; if (mv) { commit(); renderProps(); } return; }
+  if (drag?.kind === 'roomSize') {
+    const moved = drag.moved, n = drag.neigh.length; drag = null; activeControls().enabled = true; sizeLabel.show = false;
+    if (moved) { rebuildStructure(); fixItemsAfterStructure(); updateRoomHighlight(); commit(); renderProps(); if (n) toast(`ปรับห้องข้าง ๆ ที่ใช้ผนังร่วมกันตามแล้ว ${n} ห้อง (Ctrl+Z เพื่อย้อนกลับ)`); }
+    return;
+  }
   if (drag?.kind === 'rotate') {
     const moved = drag.moved; drag = null; activeControls().enabled = true; sizeLabel.show = false;
     if (moved) commit(); updateHandles(); return;
@@ -7262,6 +7421,105 @@ function updateHandles() {
     h.position.set(x, (it.elev || 0) + Math.min(it.h, 0.9) + gy, z);
     h.visible = true;
   });
+}
+/* ---------- ปรับขนาดห้องด้วยการลากมุม/ขอบ (แบบแอปแต่งบ้าน) ----------
+   จุดสีน้ำเงิน 8 จุดรอบห้องที่เลือก • ผนังขยับตามทันที • ห้องข้าง ๆ ที่ใช้ผนังร่วมกันปรับตาม • ประตู/หน้าต่าง/ของบนผนังที่ย้ายเลื่อนตาม
+   ยึดทีละ 5 ซม. (Shift = 1 ซม.) และดูดเข้าแนวขอบห้องอื่น/ขอบบ้านเมื่อใกล้ */
+const roomHandleGroup = new THREE.Group(); roomHandleGroup.visible = false; helperGroup.add(roomHandleGroup);
+(() => {
+  const white = new THREE.MeshBasicMaterial({ color: '#ffffff', depthTest: false }), blue = new THREE.MeshBasicMaterial({ color: '#2563eb', depthTest: false });
+  for (const hx of [-1, 0, 1]) for (const hz of [-1, 0, 1]) {
+    if (!hx && !hz) continue;
+    const h = new THREE.Group(), corner = hx && hz;
+    const o = new THREE.Mesh(corner ? new THREE.SphereGeometry(1, 16, 10) : new THREE.BoxGeometry(hx ? 1.1 : 2.6, 1.1, hz ? 1.1 : 2.6), white); o.renderOrder = 1005;
+    const i = new THREE.Mesh(corner ? new THREE.SphereGeometry(0.72, 16, 10) : new THREE.BoxGeometry(hx ? 0.75 : 2.2, 0.75, hz ? 0.75 : 2.2), blue); i.renderOrder = 1006;
+    h.add(o, i); h.userData = { rh: true, hx, hz }; roomHandleGroup.add(h);
+  }
+})();
+function updateRoomHandles() {
+  const r = sel?.kind === 'room' && getRoom(sel.id);
+  const show = !!r && (r.level || 0) === curLevel && (mode === 'orbit' || mode === 'plan') && !tool && !(dollOn && (dollExT || dollEx)) && !(roofGroup.visible && mode !== 'plan');
+  roomHandleGroup.visible = show; if (!show) return;
+  const k = camera.isOrthographicCamera ? (camera.top - camera.bottom) / camera.zoom * 0.011 : camera.position.distanceTo(orbit.target) * 0.011;
+  for (const h of roomHandleGroup.children) {
+    const { hx, hz } = h.userData;
+    h.position.set(r.x + r.w * (hx + 1) / 2, 0.06, r.z + r.d * (hz + 1) / 2);
+    h.scale.setScalar(clamp(k, 0.06, 0.35));
+  }
+}
+function pickRoomHandle(cx, cy) {
+  if (!roomHandleGroup.visible) return null;
+  setRay(cx, cy); roomHandleGroup.updateMatrixWorld(true);
+  const hit = raycaster.intersectObjects(roomHandleGroup.children, true)[0];
+  return hit ? hit.object.parent.userData : null;
+}
+function startRoomResize(h) {
+  const r = getRoom(sel.id); if (!r) return;
+  const L = r.level || 0, R = lvRect(L), eps = 0.03, others = roomsOf(L).filter(o => o !== r);
+  const ovZ = o => Math.min(o.z + o.d, r.z + r.d) - Math.max(o.z, r.z) > 0.2, ovX = o => Math.min(o.x + o.w, r.x + r.w) - Math.max(o.x, r.x) > 0.2;
+  const edges = []; // ขอบที่ลาก: x1 x2 z1 z2
+  if (h.hx === -1) edges.push('x1'); if (h.hx === 1) edges.push('x2'); if (h.hz === -1) edges.push('z1'); if (h.hz === 1) edges.push('z2');
+  const val = { x1: r.x, x2: r.x + r.w, z1: r.z, z2: r.z + r.d }, onHouse = { x1: Math.abs(r.x - R.x) < eps, x2: Math.abs(r.x + r.w - R.x - R.w) < eps, z1: Math.abs(r.z - R.z) < eps, z2: Math.abs(r.z + r.d - R.z - R.d) < eps };
+  const neigh = [];
+  for (const e of edges) {
+    if (onHouse[e]) continue; // ขอบติดผนังนอกบ้าน: ไม่มีห้องข้างนอก
+    for (const o of others) {
+      if (e === 'x2' && Math.abs(o.x - val.x2) < eps && ovZ(o)) neigh.push({ o, e, side: 'x1', s: { x: o.x, w: o.w, z: o.z, d: o.d } });
+      if (e === 'x1' && Math.abs(o.x + o.w - val.x1) < eps && ovZ(o)) neigh.push({ o, e, side: 'x2', s: { x: o.x, w: o.w, z: o.z, d: o.d } });
+      if (e === 'z2' && Math.abs(o.z - val.z2) < eps && ovX(o)) neigh.push({ o, e, side: 'z1', s: { x: o.x, w: o.w, z: o.z, d: o.d } });
+      if (e === 'z1' && Math.abs(o.z + o.d - val.z1) < eps && ovX(o)) neigh.push({ o, e, side: 'z2', s: { x: o.x, w: o.w, z: o.z, d: o.d } });
+    }
+  }
+  // ประตู หน้าต่าง และของติดผนังบนผนังที่ลาก (เฉพาะผนังภายใน — ผนังนอกบ้านอยู่ที่เดิม)
+  const t = state.house.wallThickness, wallItems = [];
+  for (const it of state.items) {
+    if (itemLevel(it) !== L || !(isWallMount(it) || isOnWall(it))) continue;
+    for (const e of edges) {
+      if (onHouse[e]) continue;
+      const vert = e[0] === 'x', c = val[e], tol = t / 2 + (isOnWall(it) ? it.d + 0.12 : 0.08);
+      const along = vert ? it.z >= r.z - 0.05 && it.z <= r.z + r.d + 0.05 : it.x >= r.x - 0.05 && it.x <= r.x + r.w + 0.05;
+      if (along && Math.abs((vert ? it.x : it.z) - c) < tol) { wallItems.push({ it, e, p0: vert ? it.x : it.z }); break; }
+    }
+  }
+  drag = { kind: 'roomSize', id: r.id, L, edges, start: { ...val }, neigh, wallItems, moved: false };
+  activeControls().enabled = false;
+}
+function roomResizeTo(cx, cy, fine) {
+  const p = floorPoint(cx, cy), r = getRoom(drag.id); if (!p || !r) return;
+  const L = drag.L, R = lvRect(L), S = drag.start, MIN = 1.0, nIds = new Set(drag.neigh.map(n => n.o.id));
+  const snapV = v => fine ? Math.round(v * 100) / 100 : Math.round(v * 20) / 20;
+  const rest = roomsOf(L).filter(o => o !== r && !nIds.has(o.id));
+  const xs = [R.x, R.x + R.w, ...rest.flatMap(o => [o.x, o.x + o.w])], zs = [R.z, R.z + R.d, ...rest.flatMap(o => [o.z, o.z + o.d])];
+  const mag = (v, cs) => { if (fine) return v; let b = v, bd = 0.15; for (const c of cs) { const dd = Math.abs(c - v); if (dd < bd) { bd = dd; b = c; } } return b; };
+  const v = { ...S };
+  // ขอบเขต: ห้องต้องกว้าง ≥ 1 ม. • ห้องข้าง ๆ ต้องเหลือ ≥ 1 ม. • อยู่ในตัวบ้าน
+  const lim = { x1: [R.x, S.x2 - MIN], x2: [S.x1 + MIN, R.x + R.w], z1: [R.z, S.z2 - MIN], z2: [S.z1 + MIN, R.z + R.d] };
+  for (const n of drag.neigh) {
+    if (n.side === 'x1') lim.x2[1] = Math.min(lim.x2[1], n.s.x + n.s.w - MIN);
+    if (n.side === 'x2') lim.x1[0] = Math.max(lim.x1[0], n.s.x + MIN);
+    if (n.side === 'z1') lim.z2[1] = Math.min(lim.z2[1], n.s.z + n.s.d - MIN);
+    if (n.side === 'z2') lim.z1[0] = Math.max(lim.z1[0], n.s.z + MIN);
+  }
+  for (const e of drag.edges) v[e] = clamp(mag(snapV(e[0] === 'x' ? p.x : p.z), e[0] === 'x' ? xs : zs), lim[e][0], lim[e][1]);
+  if (['x1', 'x2', 'z1', 'z2'].every(e => Math.abs(v[e] - (e === 'x1' ? r.x : e === 'x2' ? r.x + r.w : e === 'z1' ? r.z : r.z + r.d)) < 1e-6)) return;
+  const rd = q => Math.round(q * 1000) / 1000; // กันเศษทศนิยม (4.6000000001)
+  r.x = rd(v.x1); r.w = rd(v.x2 - v.x1); r.z = rd(v.z1); r.d = rd(v.z2 - v.z1);
+  for (const n of drag.neigh) {
+    const o = n.o;
+    if (n.side === 'x1') { o.x = rd(v.x2); o.w = rd(n.s.x + n.s.w - v.x2); }
+    if (n.side === 'x2') { o.w = rd(v.x1 - n.s.x); }
+    if (n.side === 'z1') { o.z = rd(v.z2); o.d = rd(n.s.z + n.s.d - v.z2); }
+    if (n.side === 'z2') { o.d = rd(v.z1 - n.s.z); }
+  }
+  for (const wi of drag.wallItems) {
+    const dlt = v[wi.e] - S[wi.e];
+    if (wi.e[0] === 'x') wi.it.x = Math.round((wi.p0 + dlt) * 1000) / 1000; else wi.it.z = Math.round((wi.p0 + dlt) * 1000) / 1000;
+    const g = itemObjs.get(wi.it.id); if (g) applyTransform(g, wi.it);
+  }
+  drag.moved = true;
+  rebuildWalls(L); rebuildFloors(); rebuildLabels(); updateRoomHighlight();
+  sizeLabel.pos.set(r.x + r.w / 2, lvBase(L) + 0.3, r.z + r.d / 2);
+  sizeLabel.el.textContent = `${r.w.toFixed(2)} × ${r.d.toFixed(2)} ม. · ${(r.w * r.d).toFixed(1)} ตร.ม.${drag.neigh.length ? ` · ห้องข้าง ๆ ${drag.neigh.length} ห้องปรับตาม` : ''}`; sizeLabel.show = true;
 }
 function pickHandle(cx, cy) {
   if (!selectedItem()) return null;
@@ -8591,6 +8849,7 @@ function updateHint() {
   else if (sel?.kind === 'multi') t = `เลือกอยู่ ${sel.ids.length} ชิ้น • ลากเพื่อย้ายพร้อมกัน • ปุ่มลูกศรเลื่อน • <b>Delete</b> ลบ • <b>Ctrl+D</b> ทำสำเนา • <b>Esc</b> ยกเลิก`;
   else if (sel?.kind === 'item') t = 'ลากเพื่อย้าย • ลาก<b style="color:#93c5fd">จุดสีน้ำเงิน ⟳</b>เพื่อหมุน (หรือ <b>R</b> / <b>Shift+ล้อเมาส์</b>) • ลูกศรสีน้ำเงิน = ด้านหน้า • <b>Delete</b> ลบ • <b>Ctrl+D</b> ทำสำเนา';
   else if (mode === 'plan') t = 'แปลน 2D: ลากพื้นที่ว่างเพื่อเลื่อน • ล้อเมาส์/สองนิ้วเพื่อซูม • ลากของเพื่อย้าย';
+  else if (sel?.kind === 'room') t = 'ลาก<b style="color:#93c5fd">จุดสีน้ำเงิน</b>ที่มุม/ขอบห้องเพื่อปรับขนาด — ผนังและห้องข้าง ๆ ขยับตาม • <b>Shift</b> = ละเอียด 1 ซม. • คลิกพื้นที่ว่างเพื่อเลิกเลือก';
   else t = matchMedia('(pointer:coarse)').matches ? 'แตะ "📦 คลังของ" เลือกของ แล้วแตะพื้นเพื่อวาง • ลากนิ้วหมุนมุมมอง • ใช้ 2 นิ้วซูม/เลื่อน'
     : 'เลือกของจากคลังด้านซ้ายแล้วคลิกบนพื้นเพื่อวาง • ลากพื้นที่ว่างเพื่อหมุนมุมมอง • คลิกขวาลากเพื่อเลื่อน • ล้อเมาส์ซูม';
   h.innerHTML = t; h.classList.toggle('active', act); h.classList.toggle('top', mode === 'walk');
@@ -8652,11 +8911,11 @@ $('#fileInput').addEventListener('change', e => {
 });
 
 // เรนเดอร์ภาพมุมกล้องปัจจุบัน (ซ่อนเส้นช่วย และวาดป้ายชื่อห้องลงไปในภาพ)
-function renderSnapshot() {
-  const hide = [roomHL, drawRect, distGroup, elevGuide, handleGroup, ghost, frontArrow].filter(Boolean), was = hide.map(o => o.visible);
+function renderSnapshot(opt = {}) {
+  const hide = [roomHL, drawRect, distGroup, elevGuide, handleGroup, ghost, frontArrow, roomHandleGroup].filter(Boolean), was = hide.map(o => o.visible);
   hide.forEach(o => (o.visible = false));
   if (selBox) selBox.visible = false;
-  renderer.render(scene, camera);
+  renderFrame(true);
   const src = renderer.domElement, c = document.createElement('canvas');
   c.width = src.width; c.height = src.height;
   const ctx = c.getContext('2d'), k = src.width / vw;
@@ -8667,7 +8926,7 @@ function renderSnapshot() {
     for (const L of roomLabels) {
       _v.copy(L.pos).project(camera); if (_v.z > 1 || _v.z < -1) continue;
       const x = (_v.x + 1) / 2 * c.width, y = (1 - _v.y) / 2 * c.height, r = getRoom(L.roomId); if (!r) continue;
-      const t1 = r.name, t2 = `${(r.w * r.d).toFixed(1)} ตร.ม.`;
+      const t1 = r.name, t2 = `${(r.w * r.d).toFixed(1)} ตร.ม.${vstyle() === 'bw' ? ` · ${r.w.toFixed(2)}×${r.d.toFixed(2)} ม.` : ''}`;
       ctx.font = `600 ${13 * k}px 'IBM Plex Sans Thai', Tahoma, sans-serif`;
       const bw = Math.max(ctx.measureText(t1).width, ctx.measureText(t2).width) + 20 * k, bh = 40 * k;
       ctx.fillStyle = 'rgba(255,255,255,.88)';
@@ -8677,7 +8936,7 @@ function renderSnapshot() {
     }
   }
   ctx.textAlign = 'right'; ctx.textBaseline = 'bottom'; ctx.font = `${12 * k}px 'IBM Plex Sans Thai', Tahoma, sans-serif`; ctx.fillStyle = 'rgba(15,23,42,.6)';
-  ctx.fillText(`แบบบ้าน ${state.house.width}×${state.house.depth} ม. · ${new Date().toLocaleDateString('th-TH')}`, c.width - 12 * k, c.height - 10 * k);
+  if (!opt.noCaption) ctx.fillText(`แบบบ้าน ${state.house.width}×${state.house.depth} ม. · ${new Date().toLocaleDateString('th-TH')}`, c.width - 12 * k, c.height - 10 * k);
   hide.forEach((o, i) => (o.visible = was[i]));
   if (selBox) selBox.visible = true;
   return c;
@@ -10272,8 +10531,10 @@ const MANUAL = [
       <tr><td><b>✂️ ตัดผนัง</b></td><td><b>อัตโนมัติ</b> = ตัดผนังด้านที่หันเข้ากล้อง (หมุนกล้องแล้วเปลี่ยนตาม) • <b>ไม่ตัด</b> = เห็นผนังครบ • หรือเลือกเองว่าจะตัดด้าน <b>บน ล่าง ซ้าย ขวา</b> (ตามแปลน เลือกได้หลายด้าน) — ประตู หน้าต่าง แอร์บนผนังที่ตัดจะซ่อนให้ด้วย</td></tr>
       <tr><td><b>⇕ แยกชั้น</b></td><td>ยกชั้นบนลอยขึ้น (มีภาพเคลื่อนไหว) ให้เห็นทุกชั้นพร้อมกัน • ระหว่างแยกชั้นเป็นการดูอย่างเดียว กด <b>⇣ รวมชั้น</b> เพื่อกลับมาแก้ไข</td></tr>
       <tr><td><b>📐 แปลน → สมจริง</b></td><td>ในโหมดแปลน เลือก <b>แบบแปลน: สมจริง</b> → มองจากด้านบนเหมือนภาพถ่าย เห็นพื้นไม้ กระเบื้อง เฟอร์นิเจอร์ (ซ่อนดวงไฟเพดาน/แอร์ที่บังพื้น)</td></tr>
-      <tr><td><b>📐 แปลน → ขาว-ดำ</b></td><td>แปลนลายเส้นแบบสถาปนิก ผนังดำทึบ ของเป็นเส้นขอบ ต้นไม้เป็นวงกลม • ยังลาก/แก้ไขได้ตามปกติ • <b>ปกติ</b> = แปลนสำหรับแก้ไข (มีกริด)</td></tr>
-      <tr><td><b>📷 บันทึกภาพ</b></td><td>อยู่ท้ายแถบตัวเลือก — บันทึกภาพมุมที่เห็นเป็นไฟล์ PNG ไว้ส่งลูกค้า</td></tr>
+      <tr><td><b>📐 แปลน → ขาว-ดำ</b></td><td>แปลนลายเส้นแบบสถาปนิก ผนังดำทึบ ของเป็นเส้นขอบ ต้นไม้เป็นวงกลม <b>มีเส้นบอกขนาด 3 แถวรอบบ้าน</b> (ช่องประตู/หน้าต่าง • ขนาดแต่ละห้อง • ขนาดรวม) และขนาดกว้าง×ยาวในป้ายชื่อห้อง • ยังลาก/แก้ไขได้ตามปกติ • <b>ปกติ</b> = แปลนสำหรับแก้ไข (มีกริด)</td></tr>
+      <tr><td><b>✂️ แบบตัด</b></td><td><b>เหลือ 1 ม.</b> = ผนังด้านที่ตัดเหลือสูง 1 เมตร เห็นหน้าตัดผนังสีไม้ (เหมือนบ้านจำลอง) • <b>ยกออก</b> = เอาผนังด้านนั้นออกทั้งแผง</td></tr>
+      <tr><td><b>✨ เงานุ่ม</b></td><td>เงาตามมุมห้อง ใต้เฟอร์นิเจอร์ และรอยต่อผนังกับพื้น ให้ภาพมีมิติ (ใช้ในบ้านตุ๊กตาและแปลนสมจริง) — ถ้าเครื่องช้า กดปิดได้</td></tr>
+      <tr><td><b>🖼️ ภาพนำเสนอ</b></td><td>บันทึกภาพความละเอียดสูงในกรอบการ์ด มีชื่อโครงการ จำนวนชั้น/ห้อง พื้นที่ และงบประมาณ — พร้อมส่งลูกค้า • <b>📷 PNG</b> = ภาพธรรมดาไม่มีกรอบ</td></tr>
     </table>
     <div class="mg-tip">💡 บนมือถือ กดปุ่ม <b>มุมมอง</b> ที่แถบล่างวนไป: 3D → บ้านตุ๊กตา → แปลน → เดินชม</div>` },
   { id: 'begin', icon: '🏡', title: 'เริ่มแบบบ้าน (แกลเลอรี / ออกแบบให้)', html: `
@@ -10750,9 +11011,11 @@ function loop(now) {
   if (mode === 'walk') updateWalk(dt); else activeControls().update();
   updateWallFade();
   updateViewStyle();
+  updateRoomHandles();
   // เมื่อแสดงหลังคา (หรือบ้านตุ๊กตา) ซ่อนป้ายชื่อห้อง
   if ((roofGroup.visible || dollOn) && mode !== 'walk') { roomLabels.forEach(L => (L.el.style.display = 'none')); dimLabels.forEach(L => (L.el.style.display = 'none')); }
   else { roomLabels.forEach(placeLabel); dimLabels.forEach(placeLabel); }
+  if (planStyle === 'bw' && mode === 'plan') dimLabels.forEach(L => (L.el.style.display = 'none'));
   distLabels.forEach(placeLabel); placeLabel(elevLabel); placeLabel(sizeLabel);
   measures.forEach(m => placeLabel(m.label)); if (measureTmp) placeLabel(measureTmp.label);
   updateCompass();
@@ -10762,7 +11025,7 @@ function loop(now) {
   if (!nightMode && !nightBusy && mode !== 'walk' && !drag && now > 4000 && now - lastInputT > 1500 && (nightWarm.dirty || nightWarm.queue.length)) {
     try { nightWarmStep(); } catch (e) { nightWarm.queue.length = 0; nightWarm.dirty = false; console.warn('night warm-up', e); }
   }
-  renderer.render(scene, camera);
+  renderFrame();
 }
 
 
