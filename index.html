@@ -849,6 +849,11 @@ const CATALOG = {
   bicycle:      { cat: 'garage', name: 'จักรยาน', icon: '🚲', w: 60, d: 175, h: 100, color: '#0f766e' },
   ev_charger:   { cat: 'garage', name: 'เครื่องชาร์จรถไฟฟ้า (ติดผนัง)', icon: '🔌', w: 25, d: 15, h: 40, elev: 110, color: '#f8fafc', onWall: true, fenceMount: true },
   motorcycle:   { cat: 'garage', name: 'มอเตอร์ไซค์', icon: '🏍️', w: 70, d: 190, h: 110, color: '#c0392b' },
+  scooter:      { cat: 'garage', name: 'สกูตเตอร์ (แบบ Scoopy / Fino)', icon: '🛵', w: 68, d: 185, h: 112, color: '#efe4cf' },
+  bigbike:      { cat: 'garage', name: 'บิ๊กไบค์ (สปอร์ต)', icon: '🏍️', w: 80, d: 210, h: 115, color: '#15803d' },
+  kid_bike:     { cat: 'garage', name: 'จักรยานเด็ก (มีล้อพยุง)', icon: '🚲', w: 50, d: 120, h: 78, color: '#ec4899' },
+  stroller:     { cat: 'garage', name: 'รถเข็นเด็ก', icon: '👶', w: 56, d: 85, h: 105, color: '#475569' },
+  wheelchair:   { cat: 'garage', name: 'รถเข็นวีลแชร์', icon: '♿', w: 65, d: 105, h: 92, color: '#1e3a5f' },
   garage_door:  { cat: 'garage', name: 'ประตูม้วน', icon: '🔲', w: 280, d: 10, h: 240, color: '#b8bec6', wall: true, kind: 'garage' },
   carport:      { cat: 'garage', name: 'โรงจอดรถ (หลังคาโครงเหล็ก)', icon: '🅿️', w: 600, d: 600, h: 260, color: '#9ca3af', outdoor: true },
   storage_shelf:{ cat: 'garage', name: 'ชั้นเก็บของ', icon: '🧰', w: 120, d: 45, h: 180, color: '#6b7280' },
@@ -914,6 +919,7 @@ const CATALOG = {
   lounger:      { cat: 'outdoor', name: 'เก้าอี้อาบแดด', icon: '🏖️', w: 70, d: 190, h: 40, color: '#f5f5f5' },
   garden_light: { cat: 'outdoor', name: 'ไฟสนาม', icon: '🏮', w: 20, d: 20, h: 80, color: '#3f3f46' },
   water_tank:   { cat: 'outdoor', name: 'แทงค์น้ำ', icon: '🛢️', w: 100, d: 100, h: 150, color: '#7aa3c7' },
+  tank_pump:    { cat: 'outdoor', name: 'ชุดแทงค์น้ำ + ปั๊มน้ำอัตโนมัติ', icon: '🛢️', w: 170, d: 110, h: 160, color: '#c0c6cc' },
   // ประตู/หน้าต่าง: kind บอกกลุ่ม (ใช้ร่วมกันตอนเจาะผนัง พิมพ์แบบ และประมาณราคา)
   door:         { cat: 'structure', name: 'ประตูบานเปิด', icon: '🚪', w: 90, d: 10, h: 210, color: '#9a6b45', wall: true, kind: 'door' },
   door_double:  { cat: 'structure', name: 'ประตูบานคู่', icon: '🚪', w: 160, d: 10, h: 210, color: '#8b5e3c', wall: true, kind: 'door' },
@@ -971,6 +977,11 @@ const CATALOG = {
   altar:        { cat: 'other', name: 'โต๊ะหมู่บูชา', icon: '🙏', w: 120, d: 70, h: 120, color: '#5c3a21' },
   shrine_shelf: { cat: 'other', name: 'หิ้งพระ (ติดผนัง)', icon: '🛕', w: 80, d: 35, h: 55, elev: 170, color: '#6b3f22', onWall: true },
   shoe_cabinet: { cat: 'other', name: 'ตู้รองเท้า', icon: '👟', w: 100, d: 35, h: 110, color: '#d6c7a8' },
+  // ของใช้บ้านไทย
+  water_dispenser:{ cat: 'kitchen', name: 'ตู้กดน้ำ (ถังคว่ำ)', icon: '🚰', w: 32, d: 34, h: 145, color: '#f8fafc' },
+  food_cabinet: { cat: 'kitchen', name: 'ตู้กับข้าวมุ้งลวด', icon: '🗄️', w: 90, d: 45, h: 170, color: '#8b5a2b' },
+  washer_top:   { cat: 'bath', name: 'เครื่องซักผ้าฝาบน', icon: '🧺', w: 56, d: 58, h: 98, color: '#f1f5f9' },
+  drying_rack:  { cat: 'other', name: 'ราวตากผ้า (ล้อเลื่อน)', icon: '👕', w: 160, d: 55, h: 155, color: '#c3c8ce' },
 };
 // ของที่เป็น "พื้นผิว" ให้ของชิ้นเล็กวางซ้อนด้านบนได้
 const STACK_TARGETS = new Set(['tv_stand', 'coffee_table', 'dining_table', 'counter', 'dresser', 'fridge', 'wardrobe']);
@@ -5899,6 +5910,347 @@ function buildShoeCabinet(it) {
   return g;
 }
 
+/* ---------- ยานพาหนะเพิ่ม + ของใช้บ้านไทย — รถ: หน้ารถ +z • ของชิดผนัง: ด้านหลัง −z ---------- */
+const _UPV = new THREE.Vector3(0, 1, 0);
+// ท่อตรงจากจุด a ไป b
+function ROD(g, a, b, r, m, seg = 8) {
+  const A = new THREE.Vector3(...a), dir = new THREE.Vector3(...b).sub(A), L = dir.length();
+  const o = new THREE.Mesh(new THREE.CylinderGeometry(r, r, Math.max(L, 0.001), seg), m);
+  o.position.copy(A).addScaledVector(dir, 0.5); if (L > 1e-6) o.quaternion.setFromUnitVectors(_UPV, dir.normalize()); g.add(o); return o;
+}
+// ส่วนโค้งของวง (ในระนาบ yz รอบจุด (x, cy, cz)) — มุม 0° = ด้านหลัง (−z), 90° = ด้านบน, 180° = ด้านหน้า (+z)
+function ARC(g, R, tube, x, cy, cz, fromDeg, arcDeg, m) {
+  const o = new THREE.Mesh(new THREE.TorusGeometry(R, tube, 6, Math.max(6, Math.round(arcDeg / 8)), arcDeg * Math.PI / 180), m);
+  o.rotation.set(0, Math.PI / 2, fromDeg * Math.PI / 180); o.position.set(x, cy, cz); g.add(o); return o;
+}
+// ล้อ (แกนล้อตามแนว x): ยาง + ขอบล้อ + ซี่ล้อ (spokes = จำนวนเส้นผ่าศูนย์กลาง) หรือ ล้อแม็ก (spokes < 0)
+function WHEEL(g, R, tube, x, z, tire, rim, spokes = 0, hubW = 0.05) {
+  const t = new THREE.Mesh(new THREE.TorusGeometry(R - tube, tube, 10, 32), tire); t.rotation.y = Math.PI / 2; t.position.set(x, R, z); g.add(t);
+  const ri = R - tube * 1.9;
+  if (spokes > 0) {
+    const rr = new THREE.Mesh(new THREE.TorusGeometry(ri, Math.max(0.006, tube * 0.3), 6, 32), rim); rr.rotation.y = Math.PI / 2; rr.position.set(x, R, z); g.add(rr);
+    for (let i = 0; i < spokes; i++) { const a = i / spokes * Math.PI, cy = Math.cos(a) * ri, sz = Math.sin(a) * ri; ROD(g, [x, R + cy, z + sz], [x, R - cy, z - sz], 0.0022, rim, 4); }
+  } else if (spokes < 0) { // ล้อแม็ก: จานล้อ + ก้านหนา
+    const n = -spokes, dk = C(g, ri, ri, tube * 1.2, 0, 0, 0, rim, 28); dk.rotation.z = Math.PI / 2; dk.position.set(x, R, z);
+    const inner = C(g, ri * 0.82, ri * 0.82, tube * 1.25, 0, 0, 0, M('#16181b', { r: .6 }), 28); inner.rotation.z = Math.PI / 2; inner.position.set(x, R, z);
+    for (let i = 0; i < n; i++) { const a = i / n * Math.PI * 2; const s = B(g, tube * 1.3, ri * 0.85, ri * 0.16, 0, 0, 0, rim); s.geometry.translate(0, -ri * 0.85 / 2 + ri * 0.42, 0); s.position.set(x, R, z); s.rotation.x = a; }
+  }
+  const hub = C(g, 0.022, 0.022, hubW, 0, 0, 0, rim, 12); hub.rotation.z = Math.PI / 2; hub.position.set(x, R, z);
+  return t;
+}
+let _screenTex = null;
+function screenNetTex() { // ตาข่ายมุ้งลวด
+  if (_screenTex) return _screenTex;
+  const S = 64, c = document.createElement('canvas'); c.width = c.height = S; const x = c.getContext('2d');
+  x.fillStyle = 'rgba(255,255,255,0.15)'; x.fillRect(0, 0, S, S); x.fillStyle = 'rgba(40,40,40,0.95)';
+  for (let i = 0; i < S; i += 4) { x.fillRect(i, 0, 1, S); x.fillRect(0, i, S, 1); }
+  const t = new THREE.CanvasTexture(c); t.wrapS = t.wrapT = THREE.RepeatWrapping; t.repeat.set(10, 10); t.colorSpace = THREE.SRGBColorSpace;
+  return (_screenTex = t);
+}
+
+// --- สกูตเตอร์ (แบบ Scoopy / Fino): ล้อแม็กเล็ก พื้นวางเท้า บังลมหน้า ไฟหน้าที่แฮนด์ ---
+function buildScooter(it) {
+  const g = new THREE.Group(), { w, d, h } = it;
+  const body = M(it.color, { r: .28, m: .12 }), dark = M('#24272b', { r: .6 }), tire = M('#1b1b1b', { r: .85 }), alloy = MM('#c4c9cf', .3), seat = FM('#4a3426', 'fabric', { r: .75 }), chrome = MM('#e3e7ea', .08);
+  const R = Math.min(0.25, d * 0.135), zf = d / 2 - R - 0.03, zr = -d / 2 + R + 0.14;
+  WHEEL(g, R, 0.045, 0, zf, tire, alloy, -5); WHEEL(g, R, 0.05, 0, zr, tire, alloy, -5);
+  ARC(g, R + 0.04, 0.03, 0, R, zf, 55, 95, body); // บังโคลนหน้า
+  // ตะเกียบ + คอแฮนด์ (เอียงไปข้างหลัง)
+  const hy = h - 0.16, hz = zf - 0.3;
+  for (const sx of [-1, 1]) ROD(g, [sx * 0.05, R, zf], [sx * 0.05, R + 0.32, zf - 0.1], 0.02, chrome);
+  ROD(g, [0, R + 0.3, zf - 0.1], [0, hy, hz], 0.03, dark);
+  // บังลมหน้า (ด้านนอกสีตัวรถ ด้านในสีเข้ม) + พื้นวางเท้า
+  const sh = RB(g, 0.44, hy - 0.35 - 0.05, 0.07, 0, 0.35, zf - 0.27, body, 0.03); sh.rotation.x = -0.22;
+  const shi = RB(g, 0.38, hy - 0.42, 0.03, 0, 0.36, zf - 0.33, dark, 0.012); shi.rotation.x = -0.22;
+  RB(g, 0.34, 0.08, zf - 0.38 - (zr + 0.32), 0, 0.27, (zf - 0.38 + zr + 0.32) / 2, dark, 0.025);
+  RB(g, 0.36, 0.05, zf - 0.38 - (zr + 0.32), 0, 0.3, (zf - 0.38 + zr + 0.32) / 2, body, 0.02);
+  // ครอบแฮนด์ + ไฟหน้า + ปลอกแฮนด์ + มือเบรก + กระจก
+  RB(g, 0.5, 0.12, 0.2, 0, hy - 0.06, hz, body, 0.05);
+  ELL(g, 0.075, 0.05, 0.035, 0, hy, hz + 0.1, M('#fffbea', { e: '#fff1b8', ei: .9, r: .1 }));
+  B(g, 0.12, 0.03, 0.06, 0, hy + 0.06, hz - 0.03, M('#0f172a', { e: '#1e3a5f', ei: .5 })); // หน้าปัด
+  for (const sx of [-1, 1]) {
+    ROD(g, [sx * 0.24, hy, hz], [sx * w * 0.47, hy - 0.01, hz - 0.02], 0.02, dark);
+    ROD(g, [sx * 0.24, hy + 0.01, hz + 0.04], [sx * w * 0.42, hy + 0.0, hz + 0.05], 0.007, chrome);
+    ROD(g, [sx * 0.17, hy + 0.05, hz - 0.02], [sx * 0.22, h - 0.05, hz - 0.05], 0.007, chrome);
+    const mr = C(g, 0.05, 0.05, 0.015, sx * 0.22, h - 0.06, hz - 0.05, chrome, 18); mr.rotation.x = Math.PI / 2; mr.position.y = h - 0.05;
+    ELL(g, 0.03, 0.022, 0.02, sx * 0.2, hy - 0.02, hz + 0.09, M('#fb923c', { e: '#f97316', ei: .5, r: .2 })); // ไฟเลี้ยว
+  }
+  // ตัวถังท้าย + เบาะ + มือจับท้าย + ไฟท้าย
+  const sz1 = zr - 0.2, sz2 = zr + 0.62, seatY = Math.min(R + 0.45, h * 0.66);
+  RB(g, 0.36, seatY - 0.3 - 0.05, sz2 - sz1, 0, 0.3, (sz1 + sz2) / 2, body, 0.11, 3);
+  RB(g, 0.3, 0.09, sz2 - sz1 - 0.06, 0, seatY - 0.05, (sz1 + sz2) / 2 + 0.02, seat, 0.04, 3);
+  B(g, 0.37, 0.012, sz2 - sz1 - 0.1, 0, seatY - 0.12, (sz1 + sz2) / 2, chrome); // คิ้วโครเมียม
+  for (const sx of [-1, 1]) ROD(g, [sx * 0.16, seatY - 0.02, sz1 + 0.02], [sx * 0.16, seatY - 0.02, sz1 + 0.24], 0.012, chrome);
+  ROD(g, [-0.16, seatY - 0.02, sz1 + 0.02], [0.16, seatY - 0.02, sz1 + 0.02], 0.012, chrome);
+  RB(g, 0.2, 0.06, 0.04, 0, seatY - 0.2, sz1 - 0.005, M('#b91c1c', { e: '#7f1d1d', ei: .7, r: .2 }), 0.015);
+  B(g, 0.18, 0.11, 0.008, 0, seatY - 0.36, sz1 + 0.02, M('#f8fafc', { r: .5 })); // ป้ายทะเบียน
+  // ชุดเครื่องยนต์/สวิงอาร์ม + ท่อไอเสีย + ขาตั้ง
+  RB(g, 0.12, 0.16, 0.42, 0.11, R * 0.55, zr + 0.2, M('#3b3f44', { m: .5, r: .45 }), 0.04);
+  const ex = C(g, 0.04, 0.045, 0.32, 0, 0, 0, chrome, 16); ex.rotation.x = Math.PI / 2 - 0.12; ex.position.set(-0.13, R * 0.8, zr + 0.12);
+  return g;
+}
+// --- บิ๊กไบค์ (สปอร์ต): แฟริ่งหน้า ชิลด์ ล้อแม็กยางใหญ่ ดิสก์เบรก โช้คหัวกลับสีทอง ---
+function buildBigBike(it) {
+  const g = new THREE.Group(), { w, d, h } = it;
+  const body = M(it.color, { r: .22, m: .25 }), body2 = M(shade(it.color, -.55), { r: .35, m: .2 }), dark = M('#1c1e21', { r: .55 }), tire = M('#18181b', { r: .85 });
+  const rim = M('#1f2937', { m: .5, r: .35 }), disc = MM('#c9cdd2', .2), gold = MM('#c9a227', .25), chrome = MM('#d8dde2', .1), seat = FM('#1f1f1f', 'fabric', { r: .8 });
+  const R = Math.min(0.32, d * 0.15), zf = d / 2 - R - 0.02, zr = -d / 2 + R + 0.08;
+  WHEEL(g, R, 0.065, 0, zf, tire, rim, -5, 0.12); WHEEL(g, R, 0.08, 0, zr, tire, rim, -5, 0.16);
+  for (const sx of [-1, 1]) { const ds = C(g, R * 0.5, R * 0.5, 0.008, 0, 0, 0, disc, 28); ds.rotation.z = Math.PI / 2; ds.position.set(sx * 0.065, R, zf); RB(g, 0.03, 0.08, 0.1, sx * 0.075, R + R * 0.32, zf - 0.08, M('#b91c1c', { r: .4 }), 0.01); }
+  ARC(g, R + 0.03, 0.025, 0, R, zf, 70, 70, body2);
+  // โช้คหัวกลับ + แผงคอ + แฮนด์จับโช้ค
+  const tz = zf - 0.3, ty = h - 0.42;
+  for (const sx of [-1, 1]) { ROD(g, [sx * 0.085, R, zf], [sx * 0.085, R + 0.3, zf - 0.11], 0.024, chrome); ROD(g, [sx * 0.085, R + 0.28, zf - 0.1], [sx * 0.085, ty, tz], 0.032, gold); }
+  RB(g, 0.24, 0.04, 0.1, 0, ty, tz, dark, 0.015);
+  for (const sx of [-1, 1]) { ROD(g, [sx * 0.1, ty, tz], [sx * w * 0.42, ty - 0.04, tz - 0.12], 0.016, dark); ROD(g, [sx * w * 0.36, ty - 0.03, tz - 0.1], [sx * w * 0.47, ty - 0.045, tz - 0.13], 0.02, M('#111', { r: .9 })); }
+  // แฟริ่งหน้า + ไฟหน้า + ชิลด์ + กระจกมองข้าง
+  const nose = ELL(g, 0.2, 0.17, 0.32, 0, h - 0.4, zf - 0.13, body); nose.rotation.x = 0.35;
+  for (const sx of [-1, 1]) { const l = ELL(g, 0.06, 0.028, 0.04, sx * 0.08, h - 0.44, zf + 0.12, M('#f8fbff', { e: '#dbeafe', ei: 1, r: .1 })); l.rotation.z = sx * -0.35; }
+  const ws = RB(g, 0.3, 0.22, 0.012, 0, h - 0.34, zf - 0.17, M('#1e293b', { r: .05, m: .3, op: .55 }), 0.005); ws.rotation.x = -0.75;
+  for (const sx of [-1, 1]) { ROD(g, [sx * 0.15, h - 0.33, zf - 0.22], [sx * 0.24, h - 0.27, zf - 0.25], 0.008, dark); const mr = RB(g, 0.1, 0.05, 0.03, sx * 0.27, h - 0.29, zf - 0.26, body, 0.012); }
+  // แฟริ่งข้าง (ซ้าย-ขวา) + ถังน้ำมัน + เบาะคนขับ/ซ้อน + ท้ายยกสูง
+  for (const sx of [-1, 1]) { const p = ELL(g, 0.05, 0.19, 0.4, sx * 0.13, R + 0.3, zf - 0.5, body); p.rotation.x = 0.3; const s2 = ELL(g, 0.03, 0.05, 0.22, sx * 0.17, R + 0.28, zf - 0.55, body2); s2.rotation.x = 0.3; }
+  const tank = ELL(g, 0.2, 0.13, 0.27, 0, R + 0.53, zf - 0.72, body); tank.rotation.x = -0.12;
+  const sy = R + 0.48, sZ = zf - 1.03;
+  RB(g, 0.28, 0.08, 0.36, 0, sy, sZ, seat, 0.04, 3);
+  RB(g, 0.2, 0.07, 0.24, 0, sy + 0.1, sZ - 0.32, seat, 0.03, 3);
+  const tail = ELL(g, 0.14, 0.1, 0.36, 0, sy + 0.07, sZ - 0.38, body); tail.rotation.x = 0.28;
+  RB(g, 0.14, 0.035, 0.04, 0, sy + 0.08, sZ - 0.72, M('#dc2626', { e: '#b91c1c', ei: .8, r: .2 }), 0.012);
+  ROD(g, [0, sy - 0.02, sZ - 0.6], [0, R + 0.15, zr - 0.18], 0.012, dark); B(g, 0.2, 0.12, 0.008, 0, R + 0.06, zr - 0.18, M('#f8fafc', { r: .5 })); // ขาป้ายทะเบียน
+  // เครื่องยนต์ + สวิงอาร์ม + ท่อไอเสีย + ที่พักเท้า
+  RB(g, 0.3, 0.3, 0.42, 0, R * 0.6, zf - 0.62, M('#2b2f34', { m: .55, r: .4 }), 0.05);
+  for (let i = 0; i < 4; i++) B(g, 0.32, 0.012, 0.3, 0, R * 0.6 + 0.2 + i * 0.03, zf - 0.6, dark);
+  for (const sx of [-1, 1]) ROD(g, [sx * 0.11, R + 0.06, zf - 0.86], [sx * 0.11, R, zr], 0.03, M('#6b7280', { m: .6, r: .35 }));
+  const ex = C(g, 0.06, 0.07, 0.4, 0, 0, 0, MM('#3f3f46', .2), 18); ex.rotation.x = Math.PI / 2 + 0.25; ex.position.set(0.2, R + 0.12, zr + 0.28);
+  C(g, 0.045, 0.045, 0.02, 0, 0, 0, M('#0b0b0b'), 16).position.set(0.2, R + 0.07, zr + 0.08);
+  for (const sx of [-1, 1]) ROD(g, [sx * 0.12, R + 0.1, zf - 0.95], [sx * 0.22, R + 0.12, zf - 0.97], 0.012, chrome);
+  return g;
+}
+// --- จักรยานเด็ก: ล้อเล็ก ล้อพยุงข้าง ตะกร้าหน้า บังโซ่ ---
+function buildKidBike(it) {
+  const g = new THREE.Group(), { w, d, h } = it;
+  const frame = M(it.color, { m: .35, r: .4 }), tire = M('#1c1c1c', { r: .9 }), chrome = MM('#d6dbe0', .15), white = M('#f8fafc', { r: .5 }), seat = FM('#ffffff', 'fabric', { r: .7 });
+  const R = Math.min(0.21, d * 0.18), zf = d / 2 - R - 0.04, zr = -d / 2 + R + 0.14;
+  WHEEL(g, R, 0.03, 0, zf, tire, chrome, 8); WHEEL(g, R, 0.03, 0, zr, tire, chrome, 8);
+  for (const [z, a] of [[zf, 60], [zr, 15]]) ARC(g, R + 0.02, 0.015, 0, R, z, a, 100, white);
+  // ล้อพยุงข้าง
+  const tr = 0.075;
+  for (const sx of [-1, 1]) { const tx = sx * Math.min(w / 2 - 0.03, 0.22); WHEEL(g, tr, 0.02, tx, zr - 0.02, M('#f8fafc', { r: .6 }), white, 0, 0.03); ROD(g, [0, R, zr], [tx, tr + 0.05, zr - 0.02], 0.01, chrome); ROD(g, [tx, tr, zr - 0.02], [tx, tr + 0.06, zr - 0.02], 0.01, chrome); }
+  // โครง (ทรงคร่อมต่ำ)
+  const bb = [0, R * 0.95, zr + 0.28], st = [0, h * 0.72, zr + 0.18], hd = [0, h * 0.76, zf - 0.12];
+  ROD(g, [0, R, zr], bb, 0.016, frame); ROD(g, bb, [0, h * 0.68, zr + 0.2], 0.018, frame); ROD(g, [0, R, zr], [0, h * 0.68, zr + 0.2], 0.014, frame);
+  ROD(g, bb, hd, 0.022, frame); ROD(g, [0, R * 1.5, zr + 0.3], [0, h * 0.7, zf - 0.13], 0.016, frame);
+  for (const sx of [-1, 1]) ROD(g, [sx * 0.035, R, zf], [sx * 0.025, h * 0.76, zf - 0.12], 0.012, frame);
+  // เบาะ + แฮนด์ทรงสูง + ปลอก + พู่
+  ROD(g, [0, h * 0.68, zr + 0.2], st, 0.012, chrome); RB(g, 0.12, 0.05, 0.2, 0, st[1], st[2] - 0.02, seat, 0.02);
+  ROD(g, hd, [0, h - 0.05, zf - 0.16], 0.012, chrome); ROD(g, [-w * 0.42, h - 0.04, zf - 0.2], [w * 0.42, h - 0.04, zf - 0.2], 0.011, chrome);
+  for (const sx of [-1, 1]) { ROD(g, [sx * w * 0.3, h - 0.04, zf - 0.2], [sx * w * 0.46, h - 0.04, zf - 0.2], 0.017, M('#f472b6', { r: .8 })); for (let k = 0; k < 3; k++) ROD(g, [sx * w * 0.47, h - 0.04, zf - 0.2], [sx * (w * 0.5 + 0.02 + k * 0.01), h - 0.17, zf - 0.22 + k * 0.02], 0.004, M(['#fde047', '#38bdf8', '#f472b6'][k], { r: .7 }), 4); }
+  // ตะกร้าหน้า + บังโซ่ + บันได
+  RB(g, 0.24, 0.14, 0.16, 0, h * 0.62, zf - 0.02, M('#f9fafb', { r: .6, op: .9 }), 0.03);
+  RB(g, 0.2, 0.01, 0.12, 0, h * 0.62 + 0.13, zf - 0.02, M('#fbcfe8', { r: .9 }), 0.004);
+  RB(g, 0.02, 0.11, zr + 0.28 - zr + 0.06, 0.05, R * 0.95 - 0.06, (zr + zr + 0.28) / 2, white, 0.02);
+  const cr = C(g, 0.06, 0.06, 0.02, 0, 0, 0, white, 18); cr.rotation.z = Math.PI / 2; cr.position.set(0.065, R * 0.95, zr + 0.28);
+  for (const sx of [-1, 1]) B(g, 0.08, 0.02, 0.05, sx * 0.1, R * 0.95 + sx * 0.06 - 0.01, zr + 0.28, M('#111827'));
+  return g;
+}
+// --- รถเข็นเด็ก: โครงอะลูมิเนียม ประทุนกันแดด เบาะเปล ตะกร้าใต้ ล้อหน้าคู่หมุนได้ (หน้า +z) ---
+function buildStroller(it) {
+  const g = new THREE.Group(), { w, d, h } = it;
+  const frame = MM('#c9ced4', .3, .7), dark = M('#1f2937', { r: .6 }), tire = M('#18181b', { r: .85 }), fab = FM(it.color, 'fabric', { r: .9 }), fabIn = FM(shade(it.color, .55), 'fabric', { r: .9 }), foam = M('#111827', { r: .9 });
+  const Rr = 0.13, Rf = 0.085, xr = w / 2 - 0.035, xf = w / 2 - 0.08, zR = -d / 2 + 0.17, zF = d / 2 - 0.1;
+  for (const sx of [-1, 1]) { WHEEL(g, Rr, 0.03, sx * xr, zR, tire, frame, -5, 0.04); for (const k of [-1, 1]) WHEEL(g, Rf, 0.022, sx * xf + k * 0.028, zF, tire, frame, 0, 0.02); }
+  const jy = 0.5, jz = -0.06, hz = -d / 2 + 0.02;
+  for (const sx of [-1, 1]) {
+    const x = sx * (w / 2 - 0.06);
+    ROD(g, [sx * xr - sx * 0.025, Rr, zR], [x, jy, jz], 0.012, frame); // ขาหลัง
+    ROD(g, [sx * xf, Rf + 0.04, zF], [x, jy, jz], 0.012, frame); C(g, 0.018, 0.018, 0.06, sx * xf, Rf + 0.02, zF, frame, 10); // ขาหน้า + ฝาครอบล้อหมุน
+    ROD(g, [x, jy, jz], [x, h - 0.03, hz], 0.013, frame); // ด้ามเข็น
+    RB(g, 0.05, 0.06, 0.06, x, jy - 0.03, jz, dark, 0.015); // ข้อพับ
+  }
+  ROD(g, [-(w / 2 - 0.06), h - 0.03, hz], [w / 2 - 0.06, h - 0.03, hz], 0.02, foam, 12);
+  ROD(g, [-xr + 0.02, Rr, zR], [xr - 0.02, Rr, zR], 0.009, frame);
+  ROD(g, [-(w / 2 - 0.06), jy + 0.12, zF - 0.12], [w / 2 - 0.06, jy + 0.12, zF - 0.12], 0.016, foam, 10); // ราวกันหน้า
+  // เบาะเปล (ที่นั่ง + พนัก + ที่พักเท้า)
+  const sw = w - 0.16;
+  RB(g, sw, 0.07, 0.3, 0, jy - 0.06, jz + 0.08, fab, 0.03);
+  const bk = RB(g, sw, 0.42, 0.06, 0, jy - 0.04, jz - 0.1, fab, 0.03); bk.rotation.x = -0.32;
+  const bki = RB(g, sw - 0.06, 0.36, 0.02, 0, jy, jz - 0.06, fabIn, 0.01); bki.rotation.x = -0.32;
+  RB(g, sw - 0.06, 0.02, 0.24, 0, jy + 0.01, jz + 0.07, fabIn, 0.008);
+  for (const sx of [-1, 1]) RB(g, 0.03, 0.14, 0.3, sx * (sw / 2 - 0.015), jy, jz + 0.06, fab, 0.012);
+  const ft = RB(g, sw - 0.04, 0.025, 0.14, 0, jy - 0.2, zF - 0.2, fab, 0.008); ft.rotation.x = 0.5;
+  // ประทุนกันแดด (ครึ่งโดม เปิดด้านหน้า)
+  const cr = Math.min(sw / 2 + 0.04, 0.3), cv = new THREE.Mesh(new THREE.SphereGeometry(cr, 22, 10, Math.PI, Math.PI, 0, Math.PI / 2), M(it.color, { r: .9, side: THREE.DoubleSide }));
+  cv.material.map = furnTex('fabric'); cv.scale.set(1, 0.8, 1.05); cv.position.set(0, h - 0.28 - cr * 0.8 + 0.03, jz - 0.14); cv.rotation.x = -0.3; g.add(cv);
+  for (const a of [-0.3, -1.0]) { const rb = new THREE.Mesh(new THREE.TorusGeometry(cr * 1.005, 0.006, 4, 22, Math.PI), M(shade(it.color, -.35), { r: .8 })); rb.scale.set(1, 0.8, 1.05); rb.position.copy(cv.position); rb.rotation.x = a; g.add(rb); } // โครงประทุน
+  // ตะกร้าใต้เบาะ
+  RB(g, sw - 0.02, 0.12, 0.34, 0, 0.12, jz - 0.02, M('#374151', { r: .9 }), 0.03);
+  return g;
+}
+// --- รถเข็นวีลแชร์: ล้อหลังใหญ่ + ห่วงมือหมุน ล้อหน้าเล็ก เบาะผ้า ที่วางแขน ที่วางเท้า (หน้า +z) ---
+function buildWheelchair(it) {
+  const g = new THREE.Group(), { w, d, h } = it;
+  const frame = MM('#c3c8ce', .25, .8), tire = M('#1b1b1b', { r: .85 }), fab = FM(it.color, 'fabric', { r: .85 }), pad = M('#1f2937', { r: .8 }), rim = MM('#d8dde2', .15);
+  const R = Math.min(0.3, h * 0.33), Rc = 0.085, xw = w / 2 - 0.035, zw = -0.12, xc = w / 2 - 0.1, zc = d / 2 - 0.3;
+  const fx = w / 2 - 0.09, seatY = Math.min(0.5, h * 0.54), sz1 = -0.24, sz2 = 0.2;
+  for (const sx of [-1, 1]) {
+    WHEEL(g, R, 0.022, sx * xw, zw, tire, rim, 12, 0.06);
+    const pr = new THREE.Mesh(new THREE.TorusGeometry(R - 0.04, 0.009, 6, 36), rim); pr.rotation.y = Math.PI / 2; pr.position.set(sx * (xw + 0.03), R, zw); g.add(pr); // ห่วงมือหมุน
+    WHEEL(g, Rc, 0.022, sx * xc, zc, tire, frame, 0, 0.03);
+    ROD(g, [sx * xc, Rc, zc], [sx * xc, Rc + 0.1, zc - 0.03], 0.012, frame); ROD(g, [sx * xc, Rc + 0.1, zc - 0.03], [sx * fx, seatY - 0.02, sz2], 0.013, frame);
+    // โครงข้าง: ราวล่าง ราวที่นั่ง เสาหลัง ด้ามจับ
+    const x = sx * fx;
+    ROD(g, [x, seatY - 0.02, sz1], [x, seatY - 0.02, sz2], 0.013, frame);
+    ROD(g, [x, Rc + 0.1, zc - 0.03], [x, R - 0.02, zw - 0.02], 0.012, frame);
+    ROD(g, [x, R, zw], [x, seatY - 0.02, zw], 0.012, frame);
+    ROD(g, [x, seatY - 0.02, sz1], [x, h - 0.06, sz1 - 0.05], 0.013, frame);
+    ROD(g, [x, h - 0.06, sz1 - 0.05], [x, h - 0.04, sz1 - 0.18], 0.013, frame);
+    ROD(g, [x, h - 0.04, sz1 - 0.16], [x, h - 0.04, sz1 - 0.25], 0.017, pad, 10);
+    // ที่วางแขน
+    ROD(g, [x, seatY - 0.02, sz2 - 0.06], [x, seatY + 0.2, sz2 - 0.06], 0.011, frame); ROD(g, [x, seatY - 0.02, sz1 + 0.04], [x, seatY + 0.2, sz1 + 0.04], 0.011, frame);
+    RB(g, 0.05, 0.035, sz2 - sz1 - 0.04, x, seatY + 0.2, (sz1 + sz2) / 2 - 0.01, pad, 0.015);
+    // ที่วางเท้า
+    ROD(g, [x, seatY - 0.02, sz2], [sx * (fx - 0.03), 0.1, d / 2 - 0.08], 0.012, frame);
+    RB(g, 0.16, 0.012, 0.12, sx * (fx - 0.1), 0.08, d / 2 - 0.08, pad, 0.004);
+  }
+  // คานไขว้ใต้เบาะ (พับได้) + เบาะนั่ง + พนักพิง
+  ROD(g, [-fx, R - 0.08, zw + 0.05], [fx, seatY - 0.03, zw + 0.05], 0.01, frame); ROD(g, [fx, R - 0.08, zw + 0.05], [-fx, seatY - 0.03, zw + 0.05], 0.01, frame);
+  RB(g, fx * 2 + 0.01, 0.04, sz2 - sz1, 0, seatY - 0.04, (sz1 + sz2) / 2, fab, 0.012);
+  const bk = RB(g, fx * 2 + 0.01, h - 0.08 - seatY, 0.025, 0, seatY + 0.02, sz1 - 0.035, fab, 0.01); bk.rotation.x = -0.1;
+  return g;
+}
+// --- ตู้กดน้ำ (ถังคว่ำด้านบน): ก๊อกน้ำร้อนแดง/น้ำเย็นฟ้า ถาดรองน้ำ (หลัง −z) ---
+function buildWaterDispenser(it) {
+  const g = new THREE.Group(), { w, d, h } = it, body = M(it.color, { r: .35 }), dark = M('#1f2937', { r: .5 }), chrome = MM('#d1d5db', .2);
+  const bh = Math.min(h - 0.4, 1.0), bottle = M('#7dd3fc', { r: .08, op: .5 });
+  RB(g, w, bh, d, 0, 0, 0, body, 0.025);
+  RB(g, w - 0.06, 0.32, 0.04, 0, bh * 0.58, d / 2 - 0.035, dark, 0.012); // ช่องกดน้ำ
+  for (const [sx, col] of [[-1, '#dc2626'], [1, '#2563eb']]) { RB(g, 0.05, 0.06, 0.05, sx * 0.065, bh * 0.58 + 0.24, d / 2 - 0.02, M(col, { r: .35 }), 0.012); C(g, 0.008, 0.008, 0.03, sx * 0.065, bh * 0.58 + 0.21, d / 2 - 0.01, chrome, 8); ball(g, 0.006, sx * 0.06 - 0.004, bh - 0.06, d / 2 + 0.002, M(col, { e: col, ei: .9 })); }
+  RB(g, w - 0.08, 0.02, 0.08, 0, bh * 0.58 + 0.01, d / 2 - 0.02, chrome, 0.006); // ถาดรองน้ำ
+  for (let i = -2; i <= 2; i++) B(g, 0.004, 0.003, 0.07, i * 0.04, bh * 0.58 + 0.03, d / 2 - 0.02, dark);
+  B(g, w - 0.04, 0.006, 0.004, 0, bh * 0.3, d / 2 + 0.001, M('#cbd5e1'));
+  C(g, w * 0.38, w * 0.42, 0.04, 0, bh, 0, body, 28); // บ่ารองถัง
+  // ถังน้ำดื่ม 18.9 ลิตร (คว่ำ)
+  const br = Math.min(w, d) * 0.43, top = h;
+  LT(g, [[0, 0], [0.03, 0], [0.03, 0.05], [br * 0.6, 0.08], [br, 0.13], [br, top - bh - 0.08], [br * 0.92, top - bh - 0.02], [br * 0.5, top - bh], [0, top - bh]], 0, bh + 0.02, 0, bottle, 28);
+  for (const t of [0.35, 0.6]) { const rr = new THREE.Mesh(new THREE.TorusGeometry(br + 0.002, 0.006, 6, 30), bottle); rr.rotation.x = Math.PI / 2; rr.position.y = bh + 0.02 + (top - bh) * t; g.add(rr); }
+  LT(g, [[0, 0], [br * 0.98, 0], [br * 0.98, (top - bh) * 0.6], [0, (top - bh) * 0.6]], 0, bh + 0.06, 0, M('#bae6fd', { r: .1, op: .35 }), 24); // ระดับน้ำ
+  return g;
+}
+// --- ชุดแทงค์น้ำ + ปั๊มน้ำอัตโนมัติ บนลานคอนกรีต (ท่อน้ำออกไปด้านหลัง −z ฝั่งบ้าน) ---
+function buildTankPump(it) {
+  const g = new THREE.Group(), { w, d, h } = it, pvc = M('#2563eb', { r: .5 }), conc = M('#cfcac2', { r: .9 });
+  B(g, w, 0.1, d, 0, 0, 0, conc);
+  const dT = Math.min(d - 0.08, w * 0.6), r = dT / 2, tx = -w / 2 + r + 0.05;
+  const tank = buildTank({ w: dT, d: dT, h: h - 0.1, color: it.color }); tank.position.set(tx, 0.1, 0); mergeInto(g, tank);
+  // ปั๊มอัตโนมัติ (ถังแรงดันกลม + มอเตอร์ + ฝาครอบ)
+  const px = Math.min(w / 2 - 0.22, tx + r + 0.32), pY = 0.1;
+  B(g, 0.4, 0.05, 0.34, px, pY, 0.05, M('#9ca3af', { r: .8 }));
+  RB(g, 0.36, 0.3, 0.3, px, pY + 0.05, 0.05, M('#1d4ed8', { r: .4, m: .2 }), 0.04);
+  RB(g, 0.34, 0.1, 0.28, px, pY + 0.35, 0.05, M('#f8fafc', { r: .35 }), 0.04);
+  const mt = C(g, 0.1, 0.1, 0.2, 0, 0, 0, M('#e5e7eb', { r: .4 }), 18); mt.rotation.z = Math.PI / 2; mt.position.set(px - 0.06, pY + 0.2, 0.22);
+  C(g, 0.03, 0.03, 0.02, 0, 0, 0, M('#f8fafc', { r: .3 }), 14).position.set(px + 0.1, pY + 0.42, 0.21);
+  // ท่อ: แทงค์ → ปั๊ม และ ปั๊ม → เข้าบ้าน (ด้านหลัง)
+  const pyIn = pY + 0.2, ox = px - 0.18;
+  ROD(g, [tx + r * 0.7, pyIn, r * 0.55], [ox, pyIn, r * 0.55], 0.022, pvc); ROD(g, [ox, pyIn, r * 0.55], [ox, pyIn, 0.1], 0.022, pvc); ball(g, 0.03, ox, pyIn, r * 0.55, pvc);
+  ROD(g, [px + 0.05, pY + 0.45, 0.05], [px + 0.05, 0.95, 0.05], 0.02, pvc); ball(g, 0.028, px + 0.05, 0.95, 0.05, pvc);
+  ROD(g, [px + 0.05, 0.95, 0.05], [px + 0.05, 0.95, -d / 2 + 0.02], 0.02, pvc);
+  C(g, 0.035, 0.035, 0.05, px + 0.05, 0.78, 0.05, M('#b91c1c', { r: .4 }), 12); // วาล์ว
+  return g;
+}
+// --- ราวตากผ้าสแตนเลส (ล้อเลื่อน) + เสื้อแขวน + ผ้าขนหนู ---
+function buildDryingRack(it) {
+  const g = new THREE.Group(), { w, d, h } = it, st = MM(it.color, .25, .85), wheel = M('#374151', { r: .6 });
+  const ex = w / 2 - 0.03, ez = Math.min(d / 2 - 0.03, 0.26), ty = h - 0.02, ly = Math.min(0.78, h * 0.5);
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) { ROD(g, [sx * ex, 0.06, sz * ez], [sx * ex, ly, sz * ez], 0.012, st); ROD(g, [sx * ex, ly, sz * ez], [sx * ex, ty, 0], 0.012, st); C(g, 0.025, 0.025, 0.02, sx * ex, 0.025, sz * ez, wheel, 12).rotation.z = Math.PI / 2; }
+    ROD(g, [sx * ex, 0.06, -ez], [sx * ex, 0.06, ez], 0.012, st);
+  }
+  ROD(g, [-ex, ty, 0], [ex, ty, 0], 0.014, st);
+  for (const sz of [-1, 1]) ROD(g, [-ex, ly, sz * ez], [ex, ly, sz * ez], 0.012, st);
+  // เสื้อแขวนไม้แขวน
+  const cols = ['#f8fafc', '#60a5fa', '#f472b6', '#facc15', '#34d399', '#a78bfa', '#fb923c'], hang = M('#e5e7eb', { r: .5 });
+  const n = Math.max(2, Math.floor((w - 0.2) / 0.16)), sh = Math.min(0.55, ty - ly - 0.15), sw = Math.min(0.42, ez * 2 - 0.04);
+  for (let i = 0; i < n; i++) {
+    const x = -ex + 0.12 + i * (2 * ex - 0.24) / Math.max(1, n - 1), cm = FM(cols[i % cols.length], 'fabric', { r: .95 });
+    ARC(g, 0.022, 0.004, x, ty, 0, 0, 200, hang); ROD(g, [x, ty - 0.022, 0], [x, ty - 0.045, 0], 0.004, hang, 4);
+    ROD(g, [x, ty - 0.1, -sw / 2], [x, ty - 0.04, 0], 0.005, hang, 4); ROD(g, [x, ty - 0.1, sw / 2], [x, ty - 0.04, 0], 0.005, hang, 4);
+    RB(g, 0.015, sh, sw * 0.86, x, ty - 0.1 - sh, 0, cm, 0.006);
+    for (const sz of [-1, 1]) { const sl = RB(g, 0.014, 0.2, 0.1, x, ty - 0.28, sz * (sw / 2 - 0.0), cm, 0.006); sl.rotation.x = sz * 0.55; }
+  }
+  // ผ้าขนหนูพาดราวล่าง
+  const tc = ['#fca5a5', '#93c5fd', '#fde68a'], tw = Math.min(0.5, (2 * ex - 0.2) / 3);
+  for (const sz of [-1, 1]) for (let k = 0; k < 2; k++) {
+    const x = -ex + 0.1 + tw / 2 + (k * 2 + (sz > 0 ? 1 : 0)) * (2 * ex - 0.2 - tw) / 3, tm = FM(tc[(k + (sz > 0 ? 1 : 0)) % 3], 'fabric', { r: 1 });
+    for (const s of [-1, 1]) RB(g, tw, 0.36, 0.008, x, ly - 0.35, sz * ez + s * 0.015, tm, 0.003);
+    RB(g, tw, 0.012, 0.038, x, ly + 0.006, sz * ez, tm, 0.005);
+  }
+  return g;
+}
+// --- เครื่องซักผ้าฝาบน: ฝากระจก แผงควบคุมด้านหลัง ถังซักสแตนเลส (หลัง −z) ---
+function buildWasherTop(it) {
+  const g = new THREE.Group(), { w, d, h } = it, body = M(it.color, { r: .3 }), steel = MM('#c3c8cd', .2), glass = M('#334155', { r: .05, m: .3, op: .55 });
+  const bh = h - 0.12;
+  B(g, w - 0.04, 0.06, d - 0.04, 0, 0, 0, M('#9ca3af', { r: .7 }));
+  RB(g, w, bh - 0.06, d, 0, 0.06, 0, body, 0.025);
+  // ถังซัก + ฝากระจก
+  const dr = Math.min(w, d) * 0.36;
+  C(g, dr, dr, 0.012, 0, bh - 0.005, 0.04, M('#2b2f33', { r: .6 }), 32);
+  const rg = new THREE.Mesh(new THREE.TorusGeometry(dr, 0.014, 8, 36), steel); rg.rotation.x = Math.PI / 2; rg.position.set(0, bh + 0.008, 0.04); g.add(rg);
+  RB(g, w - 0.06, 0.018, d - 0.2, 0, bh, 0.06, M(shade(it.color, -.1), { r: .3 }), 0.008);
+  RB(g, w - 0.14, 0.006, d - 0.3, 0, bh + 0.016, 0.06, glass, 0.003);
+  RB(g, 0.12, 0.014, 0.025, 0, bh + 0.01, d / 2 - 0.035, M('#94a3b8', { r: .4 }), 0.006); // มือเปิดฝา
+  // แผงควบคุมเอียง
+  const pn = RB(g, w, 0.12, 0.12, 0, bh - 0.02, -d / 2 + 0.06, body, 0.025); pn.rotation.x = -0.35;
+  B(g, w * 0.36, 0.035, 0.004, 0, bh + 0.055, -d / 2 + 0.115, M('#0b1220', { e: '#38bdf8', ei: .6 })).rotation.x = -0.35;
+  for (const sx of [-1, 1]) { const k = C(g, 0.022, 0.022, 0.02, sx * w * 0.33, bh + 0.05, -d / 2 + 0.115, steel, 18); k.rotation.x = Math.PI / 2 - 0.35; }
+  for (let i = 0; i < 4; i++) ball(g, 0.008, -w * 0.12 + i * w * 0.08, bh + 0.02, -d / 2 + 0.13, M(i ? '#94a3b8' : '#22c55e', { e: i ? 0 : '#22c55e', ei: .6 }));
+  return g;
+}
+// --- ตู้กับข้าวไม้ มุ้งลวด (บ้านไทย): ขาตั้งในถ้วยกันมด ลิ้นชัก บานล่างทึบ (หลัง −z) ---
+function buildFoodCabinet(it) {
+  const g = new THREE.Group(), { w, d, h } = it, wood = FM(it.color, 'grainv', { r: .55 }), woodH = FM(it.color, 'grain', { r: .55 }), dark = M(shade(it.color, -.5), { r: .8 }), knob = MM('#c9a227', .3);
+  const net = M('#9ca3af', { r: .9, op: .55 }); net.map = screenNetTex();
+  const lg = 0.2, t = 0.022, top = h - 0.04;
+  // ขา + ถ้วยกันมด (ใส่น้ำ)
+  for (const sx of [-1, 1]) for (const sz of [-1, 1]) {
+    const x = sx * (w / 2 - 0.05), z = sz * (d / 2 - 0.05);
+    LT(g, [[0, 0], [0.04, 0], [0.055, 0.05], [0.058, 0.055], [0, 0.055]], x, 0, z, M('#f5f5f4', { r: .3 }), 18);
+    C(g, 0.05, 0.05, 0.004, x, 0.046, z, M('#7dd3fc', { r: .05, op: .7 }), 16);
+    RB(g, 0.045, lg + 0.02, 0.045, x, 0.02, z, wood, 0.008);
+  }
+  // ตัวตู้ (ข้าง หลัง พื้น เพดาน)
+  for (const sx of [-1, 1]) RB(g, t, top - lg, d, sx * (w / 2 - t / 2), lg, 0, wood, 0.004);
+  B(g, w - 2 * t, top - lg, 0.01, 0, lg, -d / 2 + 0.005, dark);
+  B(g, w - 2 * t, t, d, 0, lg, 0, woodH);
+  RB(g, w + 0.04, 0.04, d + 0.03, 0, top, 0, woodH, 0.008); // บัวบน
+  // บานล่างทึบ 2 บาน + ลิ้นชัก 2 ช่อง
+  const y1 = lg + t, y2 = lg + (top - lg) * 0.36, y3 = y2 + 0.13, fz = d / 2 - 0.006, dw = (w - 2 * t) / 2 - 0.006;
+  for (const sx of [-1, 1]) {
+    RB(g, dw, y2 - y1 - 0.01, 0.018, sx * (dw / 2 + 0.003), y1, fz, wood, 0.004);
+    RB(g, dw - 0.07, y2 - y1 - 0.08, 0.008, sx * (dw / 2 + 0.003), y1 + 0.035, fz + 0.01, woodH, 0.003);
+    ball(g, 0.012, sx * 0.04, (y1 + y2) / 2, fz + 0.02, knob);
+    RB(g, dw, y3 - y2 - 0.015, 0.018, sx * (dw / 2 + 0.003), y2 + 0.005, fz, woodH, 0.004);
+    ball(g, 0.012, sx * (dw / 2 + 0.003), (y2 + y3) / 2, fz + 0.02, knob);
+  }
+  // บานบนมุ้งลวด 2 บาน (กรอบไม้ + ตาข่าย + คานกลาง) — มองเห็นชาม/จานข้างใน
+  const y4 = top - 0.01, fw = 0.04;
+  for (const sx of [-1, 1]) {
+    const cx = sx * (dw / 2 + 0.003);
+    B(g, dw - 0.02, y4 - y3 - 0.02, 0.004, cx, y3 + 0.01, fz + 0.002, net);
+    for (const ex of [-1, 1]) RB(g, fw, y4 - y3, 0.022, cx + ex * (dw / 2 - fw / 2), y3, fz, wood, 0.004);
+    for (const yy of [y3, (y3 + y4) / 2 - fw / 2, y4 - fw]) RB(g, dw, fw, 0.022, cx, yy, fz, woodH, 0.004);
+    ball(g, 0.012, sx * 0.03, (y3 + y4) / 2, fz + 0.02, knob);
+  }
+  const ms = (y3 + y4) / 2; B(g, w - 2 * t, 0.015, d - 0.04, 0, ms - 0.0075, -0.01, woodH); B(g, w - 2 * t, 0.015, d - 0.04, 0, y3 - 0.015, -0.01, woodH);
+  const plate = M('#f8fafc', { r: .25 }), blue = M('#1d4ed8', { r: .3 });
+  for (const [yy, kind] of [[y3, 'bowl'], [ms + 0.0075, 'plate']]) for (let i = -1; i <= 1; i++) {
+    const x = i * (w - 0.2) / 3;
+    if (kind === 'bowl') for (let k = 0; k < 3; k++) LT(g, [[0, 0], [0.04, 0], [0.065, 0.045], [0.06, 0.045], [0.035, 0.006], [0, 0.006]], x, yy + k * 0.022, -0.02, k === 2 ? blue : plate, 18);
+    else { const p = C(g, 0.1, 0.1, 0.012, 0, 0, 0, plate, 24); p.rotation.x = Math.PI / 2 - 0.25; p.position.set(x, yy + 0.1, -d / 2 + 0.06); }
+  }
+  return g;
+}
+
 const BUILDERS = {
   pool: buildPool, tree: buildTree, shrub: buildShrub, fence: buildFence, gate: buildGate, gazebo: buildGazebo,
   fence_wood: buildFenceWood, fence_mesh: buildFenceMesh, fence_block: buildFenceBlock, deck: buildDeck,
@@ -5936,6 +6288,8 @@ const BUILDERS = {
   sideboard: buildSideboard, curtain: buildCurtain, wall_art: buildWallArt, upper_cabinet: buildUpperCabinet, range_hood: buildRangeHood, microwave: buildMicrowave,
   bar_stool: buildBarStool, bar_counter: buildBarCounter, bathtub: buildBathtub, washer: buildWasher, mirror: buildMirror, altar: buildAltar,
   shrine_shelf: buildShrineShelf, shoe_cabinet: buildShoeCabinet,
+  scooter: buildScooter, bigbike: buildBigBike, kid_bike: buildKidBike, stroller: buildStroller, wheelchair: buildWheelchair,
+  water_dispenser: buildWaterDispenser, tank_pump: buildTankPump, drying_rack: buildDryingRack, washer_top: buildWasherTop, food_cabinet: buildFoodCabinet,
 };
 
 function buildItemObject(it) {
@@ -10422,7 +10776,7 @@ function computeEstimate(over = {}) {
   add('plumb', cnt('toilet') + cnt('basin') + cnt('shower') + sinks + cnt('water_point') + cnt('floor_drain'), 'จุดน้ำดี/น้ำทิ้ง (สุขภัณฑ์ + จุดที่วางในแบบ)');
   add('heater', cnt('heater')); if (solarInfo.kwp) add('solar', up(solarInfo.kwp, 2), `${solarInfo.placed} แผง × ${PANEL.watt} W · ผลิต ≈ ${Math.round(solarInfo.kwh).toLocaleString('th-TH')} หน่วย/ปี`); add('ev_charger', cnt('ev_charger'), 'มักต้องขอเพิ่มขนาดมิเตอร์ไฟ (เช่น 30(100)A) แยกต่างหาก');
   add('septic', cnt('toilet') ? 1 : 0);
-  add('toilet', cnt('toilet')); add('basin', cnt('basin')); add('shower', cnt('shower')); add('sink', sinks); add('tank', cnt('water_tank'));
+  add('toilet', cnt('toilet')); add('basin', cnt('basin')); add('shower', cnt('shower')); add('sink', sinks); add('tank', cnt('water_tank') + cnt('tank_pump'));
   add('counter', up(state.items.filter(i => i.type === 'counter').reduce((a, i) => a + i.w, 0), 1), 'ตามความยาวเคาน์เตอร์ในแบบ');
 
   const openA = Math.max(0, siteArea() - groundA - hardA);
@@ -10743,6 +11097,7 @@ const FURN_PRICE = {
   nightstand: 1500, desk: 3500, office_chair: 2500, bookshelf: 2500, sofa_l: 18000, armchair: 4500, sideboard: 5500, curtain: 3500, wall_art: 1200,
   upper_cabinet: 6000, range_hood: 6500, microwave: 3000, bar_stool: 1200, bar_counter: 9000, bathtub: 15000, washer: 9000, mirror: 1200,
   altar: 12000, shrine_shelf: 2500, shoe_cabinet: 3000,
+  stroller: 4500, wheelchair: 3500, water_dispenser: 4500, tank_pump: 14000, drying_rack: 1200, washer_top: 7500, food_cabinet: 4500,
 };
 function showShoppingDialog() {
   openModal('🛒 พิมพ์รายการซื้อของ', `
@@ -10773,7 +11128,7 @@ function buildShoppingHTML(o) {
   if (o.furn) {
     const groups = {};
     for (const it of furnitureList()) {
-      if (['carport', 'water_ditch', 'car_sedan', 'car_pickup', 'car_suv', 'car_hatch', 'car_van', 'bicycle', 'motorcycle', 'stairs', 'pool', 'tree', 'shrub', 'fence', 'gate', 'path', 'driveway', 'gravel_area', 'fence_wood', 'fence_mesh', 'fence_block', 'deck', 'fish_pond', 'shrimp_pond', 'veg_bed', 'veg_plot', 'gazebo', 'garden_light', 'water_tank', 'railing', 'toilet', 'basin', 'shower', 'counter'].includes(it.type) || PRICE_LIST[it.type] || CATALOG[it.type].cat === 'animal' || ['stepping_stones', 'drain_pipe', 'pump_pipe', 'cctv_pole', 'mailbox_wall', 'walk_link', 'covered_walk', 'sala_small', 'sala_hex', 'sala_modern', 'sala_hut'].includes(it.type)) continue;
+      if (['carport', 'water_ditch', 'car_sedan', 'car_pickup', 'car_suv', 'car_hatch', 'car_van', 'bicycle', 'motorcycle', 'scooter', 'bigbike', 'kid_bike', 'stairs', 'pool', 'tree', 'shrub', 'fence', 'gate', 'path', 'driveway', 'gravel_area', 'fence_wood', 'fence_mesh', 'fence_block', 'deck', 'fish_pond', 'shrimp_pond', 'veg_bed', 'veg_plot', 'gazebo', 'garden_light', 'water_tank', 'railing', 'toilet', 'basin', 'shower', 'counter'].includes(it.type) || PRICE_LIST[it.type] || CATALOG[it.type].cat === 'animal' || ['stepping_stones', 'drain_pipe', 'pump_pipe', 'cctv_pole', 'mailbox_wall', 'walk_link', 'covered_walk', 'sala_small', 'sala_hex', 'sala_modern', 'sala_hut'].includes(it.type)) continue;
       const key = `${it.type}|${cm(it.w)}×${cm(it.d)}×${cm(it.h)}`;
       (groups[key] ||= { it, n: 0, rooms: new Set() }).n++; groups[key].rooms.add(itemRoomName(it));
     }
