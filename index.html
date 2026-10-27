@@ -9886,8 +9886,8 @@ const SCALES = [20, 25, 50, 75, 100, 125, 150, 200, 250, 300, 400, 500];
 const OPEN_TAG = { door: 'D', window: 'W', garage: 'G', opening: 'O' };
 const SIDE_NAME = { s: 'รูปด้านหน้า', n: 'รูปด้านหลัง', w: 'รูปด้านซ้าย', e: 'รูปด้านขวา' };
 const PLAN_FIXTURES = new Set(['toilet', 'basin', 'shower', 'counter', 'fridge', 'stairs']); // ของที่ช่างต้องรู้ตำแหน่ง (ท่อน้ำ)
-const printPrefs = { paper: 'A3', scale: '', site: true, plan: true, furn: true, elec: true, plumb: true, elev: true, sched: true, list: true, boq: true };
-const PRINT_SHEETS = ['site', 'plan', 'furn', 'elec', 'plumb', 'elev', 'sched', 'list', 'boq'];
+const printPrefs = { paper: 'A3', scale: '', site: true, plan: true, furn: true, elec: true, plumb: true, roof: true, elev: true, sched: true, list: true, boq: true };
+const PRINT_SHEETS = ['site', 'plan', 'furn', 'elec', 'plumb', 'roof', 'elev', 'sched', 'list', 'boq'];
 const f2 = v => (Math.round(v * 100) / 100).toFixed(2);
 const nn = v => Math.round(v * 100) / 100;
 const uniqSorted = vals => [...new Set(vals.map(v => Math.round(v * 1000) / 1000))].sort((a, b) => a - b);
@@ -10256,6 +10256,194 @@ function buildPitLid(it) {
   B(g, w, 0.04, d, 0, 0, 0, conc); B(g, w * 0.78, 0.015, d * 0.78, 0, 0.04, 0, M(shade(it.color, -.12), { r: .8 }));
   B(g, w * 0.3, 0.012, 0.03, 0, 0.055, 0, M('#4b5563'));
   return g;
+}
+/* =========================================================
+   แบบหลังคา: แปลนหลังคา (สัน ตะเข้ ทิศน้ำไหล รางน้ำ ท่อลง) + รูปตัด + ปริมาณวัสดุ + ตรวจแบบ
+   ใช้ผืนหลังคาจาก roofModel() จึงรองรับ จั่ว / ปั้นหยา / เพิงหมาแหงน / หลังคาหงาย
+   ========================================================= */
+const ROOF_Q = { // ต่อ ตร.ม.: [จำนวน, หน่วย, ระยะแป (ม.), ครอบต่อเมตร]
+  tile: [10.5, 'แผ่น', 0.32, 3], flat_tile: [10.5, 'แผ่น', 0.32, 3], clay: [24, 'แผ่น', 0.25, 4], fibro: [1.9, 'แผ่น', 0.6, 2.5],
+  metal: [1, 'ตร.ม.', 1.0, 0], metal_tile: [1, 'ตร.ม.', 0.6, 0], shingle: [1 / 3.1, 'ห่อ', 0.6, 0],
+};
+const ROOFED_TYPES = new Set(['carport', 'covered_walk', 'shed', 'gazebo', 'sala_thai', 'sala_small', 'sala_hex', 'sala_modern', 'sala_hut', 'pergola', 'sky_bridge']);
+function roofCalc() {
+  const rm = roofModel(); if (!rm) return null;
+  const rf = state.roof, EPS = 0.012, edges = new Map(), faces = [];
+  const key = (p, q) => [p, q].map(v => `${v[0].toFixed(2)},${v[2].toFixed(2)},${v[1].toFixed(2)}`).sort().join('|');
+  for (const f of rm.faces) {
+    const pts = f.pts, ys = pts.map(p => p[1]), ymin = Math.min(...ys), ymax = Math.max(...ys);
+    const u = pts[1].map((v, i) => v - pts[0][i]), w = pts[2].map((v, i) => v - pts[0][i]);
+    let n = [u[1] * w[2] - u[2] * w[1], u[2] * w[0] - u[0] * w[2], u[0] * w[1] - u[1] * w[0]]; if (n[1] < 0) n = n.map(v => -v);
+    const hl = Math.hypot(n[0], n[2]) || 1, dir = [n[0] / hl, n[2] / hl];
+    faces.push({ pts, dir, cx: pts.reduce((a, p) => a + p[0], 0) / pts.length, cz: pts.reduce((a, p) => a + p[2], 0) / pts.length, n });
+    for (let i = 0; i < pts.length; i++) {
+      const p = pts[i], q = pts[(i + 1) % pts.length], k = key(p, q);
+      const low = Math.abs(p[1] - ymin) < EPS && Math.abs(q[1] - ymin) < EPS, high = Math.abs(p[1] - ymax) < EPS && Math.abs(q[1] - ymax) < EPS;
+      const e = edges.get(k) || { p, q, n: 0, low, high, dir }; e.n++; edges.set(k, e);
+    }
+  }
+  const E = [...edges.values()], len2 = e => Math.hypot(e.q[0] - e.p[0], e.q[2] - e.p[2]), len3 = e => Math.hypot(e.q[0] - e.p[0], e.q[1] - e.p[1], e.q[2] - e.p[2]);
+  const gutters = E.filter(e => e.low), ridges = E.filter(e => e.high && e.n > 1 && len2(e) > 0.01), hips = E.filter(e => !e.low && !e.high && e.n > 1), rakes = E.filter(e => !e.low && e.n === 1 && !(e.high && e.n > 1));
+  // ท่อลงน้ำฝน: ปลายรางทุกด้าน + เพิ่มกลางรางทุก ๆ 12 ม.
+  const dps = [];
+  const addDp = (x, z) => { if (!dps.some(d => Math.hypot(d[0] - x, d[1] - z) < 0.6)) dps.push([x, z]); };
+  for (const g of gutters) { const L = len2(g), n = Math.max(1, Math.ceil(L / 12)); for (let i = 0; i <= n; i++) addDp(g.p[0] + (g.q[0] - g.p[0]) * i / n, g.p[2] + (g.q[2] - g.p[2]) * i / n); }
+  const gutterLen = gutters.reduce((a, g) => a + len2(g), 0);
+  const xs = rm.faces.flatMap(f => f.pts.map(p => p[0])), zs = rm.faces.flatMap(f => f.pts.map(p => p[2]));
+  const bb = { x0: Math.min(...xs), x1: Math.max(...xs), z0: Math.min(...zs), z1: Math.max(...zs) };
+  const Q = ROOF_Q[rf.mat] || ROOF_Q.metal, mat = ROOF_MATS[rf.mat];
+  const qty = { area: rm.area, plan: rm.planA, cover: Math.ceil(rm.area * Q[0] * 1.05), coverUnit: Q[1], caps: Q[3] ? Math.ceil((rm.ridge + rm.hips) * Q[3] * 1.05) : 0, capLen: rm.ridge + rm.hips,
+    purlin: Math.ceil(rm.area / Q[2]), purlinSp: Q[2], rafters: Math.ceil(rm.eave / 1.0) + 2, gutter: gutterLen, dps: dps.length, fascia: rm.eave + rm.rake };
+  // ตรวจแบบ
+  const checks = [], top = topFloorIndex();
+  checks.push(rf.pitch >= mat.min ? [true, `ความชัน ${rf.pitch}° ≥ ขั้นต่ำของ${mat.name} (${mat.min}°) — น้ำไม่ย้อน`] : [false, `ความชัน ${rf.pitch}° ต่ำกว่าขั้นต่ำของ${mat.name} (${mat.min}°) — น้ำฝนอาจย้อนรั่ว เพิ่มความชันหรือเปลี่ยนวัสดุ`]);
+  checks.push(rf.overhang < 0.6 ? [false, `ชายคายื่น ${f2(rf.overhang)} ม. — สั้นกว่า 0.60 ม. ฝนสาดผนังและหน้าต่างได้`] : rf.overhang > 1.5 ? [false, `ชายคายื่น ${f2(rf.overhang)} ม. — ยาวเกิน 1.50 ม. ต้องมีค้ำยัน/โครงพิเศษ`] : [true, `ชายคายื่น ${f2(rf.overhang)} ม. — กันฝนสาดผนังและหน้าต่าง`]);
+  checks.push([true, `ท่อลงน้ำฝน ${dps.length} จุด สำหรับรางยาว ${gutterLen.toFixed(1)} ม. (ไม่เกิน 12 ม. ต่อท่อ)`]);
+  if (rf.type === 'butterfly') checks.push([false, 'หลังคาหงาย: รางน้ำกลาง (Valley) รับน้ำทั้งหลัง ต้องกว้าง ลึก และกันซึมอย่างดี — ตรวจรอยรั่วเป็นประจำ']);
+  for (const it of state.items) {
+    if (!ROOFED_TYPES.has(it.type) || itemLevel(it) !== 0) continue;
+    const A = itemAABB(it), ox = Math.min(A.x2, bb.x1) - Math.max(A.x1, bb.x0), oz = Math.min(A.z2, bb.z1) - Math.max(A.z1, bb.z0);
+    if (ox > 0.005 && oz > 0.005 && it.h > rm.ye - 0.05) checks.push([false, `หลังคา${it.name || CATALOG[it.type].name}ซ้อนชายคาบ้าน ${f2(Math.min(ox, oz))} ม. · สูง ${f2(it.h)} ม. แต่ปลายชายคาอยู่ที่ +${f2(rm.ye)} — ลดความสูง หรือทำแผ่นปิดรอยต่อ (Flashing) + รางน้ำตรงรอยต่อ`]);
+  }
+  if (solarInfo.placed) checks.push([true, `แผงโซลาร์ ${solarInfo.placed} แผงบนหลังคา — โครงหลังคาต้องรับน้ำหนักเพิ่ม ~15 กก./ตร.ม. (แจ้งวิศวกร)`]);
+  checks.push([null, 'แนะนำช่องระบายอากาศใต้หลังคา (ระแนงชายคา/ครอบระบาย) + ฉนวนกันความร้อน ลดความร้อนเข้าบ้าน']);
+  return { rm, rf, mat, faces, gutters, ridges, hips, rakes, dps, gutterLen, bb, qty, checks, top, len2, len3 };
+}
+// หน้าตัดหลังคาตามแนวขวางสัน (กลางความยาว): ความสูงผิวหลังคาที่ตำแหน่ง b
+function roofProfile(C, N = 90) {
+  const { rm } = C, alongX = rm.alongX, bb = C.bb, aMid = alongX ? (bb.x0 + bb.x1) / 2 : (bb.z0 + bb.z1) / 2;
+  const b0 = alongX ? bb.z0 : bb.x0, b1 = alongX ? bb.z1 : bb.x1, out = [];
+  const inPoly = (x, z, pts) => { let c = false; for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) { const [xi, zi] = [pts[i][0], pts[i][2]], [xj, zj] = [pts[j][0], pts[j][2]]; if ((zi > z) !== (zj > z) && x < (xj - xi) * (z - zi) / (zj - zi + 1e-12) + xi) c = !c; } return c; };
+  for (let i = 0; i <= N; i++) {
+    const b = b0 + (b1 - b0) * i / N, bs = Math.min(b1 - 1e-4, Math.max(b0 + 1e-4, b)), x = alongX ? aMid + 1e-5 : bs, z = alongX ? bs : aMid + 1e-5; let y = null;
+    for (const f of C.faces) {
+      const pts = f.pts, n = f.n; if (Math.abs(n[1]) < 1e-9 || !inPoly(x, z, pts)) continue;
+      const yy = pts[0][1] - (n[0] * (x - pts[0][0]) + n[2] * (z - pts[0][2])) / n[1];
+      y = y === null ? yy : Math.max(y, yy);
+    }
+    if (y !== null) out.push([b, y]);
+  }
+  return { pts: out, b0, b1 };
+}
+// ขนาดบล็อกแปลน/รูปตัดบนกระดาษ (มม.) — วางข้างกัน หรือซ้อนบน-ล่าง แล้วแต่แบบไหนได้มาตราส่วนใหญ่กว่า
+const ROOF_MG = 32;
+function roofBlocks(C, s) {
+  const k = 1000 / s, prof = roofProfile(C), maxY = Math.max(...prof.pts.map(p => p[1]));
+  return { pw: (C.bb.x1 - C.bb.x0) * k + 2 * ROOF_MG, ph: (C.bb.z1 - C.bb.z0) * k + 2 * ROOF_MG, sw: (prof.b1 - prof.b0) * k + 62, sh: (maxY + 0.6) * k + 16 };
+}
+function roofSheetScale(C, dw, dh) {
+  let best = null;
+  for (const s of SCALES) {
+    const b = roofBlocks(C, s), side = b.pw + 10 + b.sw <= dw && Math.max(b.ph, b.sh + ROOF_MG) <= dh, stack = Math.max(b.pw, b.sw + 20) <= dw && b.ph + 6 + b.sh <= dh;
+    if (side || stack) { best = { s, stack: !side }; break; }
+  }
+  return best || { s: SCALES[SCALES.length - 1], stack: true };
+}
+function roofPlanSVG(C, sc, stack) {
+  const { rm, rf, bb } = C, Mg = ROOF_MG, k = 1000 / sc, pen = svgPen(), t = state.house.wallThickness;
+  const X = x => Mg + (x - bb.x0) * k, Y = z => Mg + (z - bb.z0) * k, PW = (bb.x1 - bb.x0) * k + 2 * Mg, PH = (bb.z1 - bb.z0) * k + 2 * Mg;
+  const shades = ['#eef2f6', '#e2e8f0', '#e8edf3', '#dde4ec'];
+  C.faces.forEach((f, i) => pen.raw(`<polygon points="${f.pts.map(p => nn(X(p[0])) + ',' + nn(Y(p[2]))).join(' ')}" fill="${shades[i % 4]}" stroke="#000" stroke-width="0.3"/>`));
+  // แนวผนังด้านล่าง (ชั้นบนสุด + ชั้น 1 ถ้าต่างกัน)
+  const wallRect = (R, dash) => pen.rect(X(R.x), Y(R.z), R.w * k, R.d * k, { sw: 0.18, extra: `stroke-dasharray="${dash}"` });
+  wallRect(lvRect(C.top), '2 1.2'); if (C.top > 0) { const R0 = lvRect(0), Rt = lvRect(C.top); if (R0.w !== Rt.w || R0.d !== Rt.d || R0.x !== Rt.x || R0.z !== Rt.z) wallRect(R0, '0.6 1'); }
+  const seg = (e, sw, col = '#000', extra = '') => pen.raw(`<line x1="${nn(X(e.p[0]))}" y1="${nn(Y(e.p[2]))}" x2="${nn(X(e.q[0]))}" y2="${nn(Y(e.q[2]))}" stroke="${col}" stroke-width="${sw}" ${extra}/>`);
+  C.ridges.forEach(e => seg(e, 0.7)); C.hips.forEach(e => seg(e, 0.45));
+  // รางน้ำ: เส้นฟ้าเยื้องออกด้านน้ำไหล (รางกลางของหลังคาหงายไม่เยื้อง)
+  for (const g of C.gutters) { const o = g.n > 1 ? 0 : 1.1; pen.raw(`<line x1="${nn(X(g.p[0]) + g.dir[0] * o)}" y1="${nn(Y(g.p[2]) + g.dir[1] * o)}" x2="${nn(X(g.q[0]) + g.dir[0] * o)}" y2="${nn(Y(g.q[2]) + g.dir[1] * o)}" stroke="#0284c7" stroke-width="${g.n > 1 ? 1.1 : 0.7}"/>`); }
+  for (const [x, z] of C.dps) pen.raw(`<circle cx="${nn(X(x))}" cy="${nn(Y(z))}" r="1.7" fill="#fff" stroke="#0284c7" stroke-width="0.35"/><text x="${nn(X(x))}" y="${nn(Y(z) + 0.55)}" font-size="1.4" font-weight="700" fill="#0284c7" text-anchor="middle">RD</text>`);
+  // ทิศน้ำไหล + มุมลาด
+  for (const f of C.faces) pen.raw(arrowSVG(X(f.cx) - f.dir[0] * 4, Y(f.cz) - f.dir[1] * 4, Math.atan2(f.dir[1], f.dir[0]), 8, '#b45309', `${rf.pitch}°`, 2.3));
+  // ป้ายสัน / ตะเข้
+  const lab = (e, txt) => { const x = (X(e.p[0]) + X(e.q[0])) / 2, y = (Y(e.p[2]) + Y(e.q[2])) / 2, w = txt.length * 1.15 + 3; pen.rect(x - w / 2, y - 5.4, w, 3.6, { fill: '#fff', sw: 0.2, extra: 'rx="0.8"' }); pen.text(x, y - 2.8, txt, 2.1, { weight: 700 }); };
+  if (C.ridges[0]) lab(C.ridges[0], `สันหลังคา ${f2(rm.ridge)} ม. · +${f2(rm.yr)}`);
+  if (C.hips[0]) lab(C.hips[0], `ตะเข้สัน ${f2(C.len3(C.hips[0]))} ม. ×${C.hips.length}`);
+  // เส้นบอกขนาดชายคา
+  const R = lvRect(C.top), top = Y(bb.z0), left = X(bb.x0);
+  pen.hChain([bb.x0, R.x, R.x + R.w, bb.x1], X, top - 9, top); pen.hChain([bb.x0, bb.x1], X, top - 17, top);
+  pen.vChain([bb.z0, R.z, R.z + R.d, bb.z1], Y, left - 9, left); pen.vChain([bb.z0, bb.z1], Y, left - 17, left);
+  pen.text(X(bb.x0) + (bb.x1 - bb.x0) * k / 2, Y(bb.z1) + 8, 'แปลนหลังคา', 3.4, { weight: 700 });
+  northArrowSVG(pen, PW - 12, 12);
+  // ---------- รูปตัด (ด้านขวา มาตราส่วนเดียวกัน) ----------
+  const prof = roofProfile(C), ox = stack ? Mg : PW + 10, maxY = Math.max(...prof.pts.map(p => p[1])), baseY = (stack ? PH + 6 : Mg) + (maxY + 0.6) * k;
+  const SX = b => ox + (b - prof.b0) * k, SY = y => baseY - y * k, alongX = rm.alongX;
+  const B0 = alongX ? R.z : R.x, B1 = alongX ? R.z + R.d : R.x + R.w, OR = '#b45309';
+  pen.line(SX(prof.b0) - 6, SY(0), SX(prof.b1) + 6, SY(0), 0.5);
+  state.levels.forEach((lv, L) => {
+    if (isRoof(L)) return; const RL = lvRect(L), lb0 = alongX ? RL.z : RL.x, lb1 = alongX ? RL.z + RL.d : RL.x + RL.w, yb = lvBase(L), yt = yb + lvHeight(L);
+    for (const b of [lb0, lb1]) pen.rect(SX(b) - t * k / 2, SY(yt), t * k, (yt - yb) * k, { fill: '#9ca3af', sw: 0 });
+    if (L > 0) pen.rect(SX(lb0), SY(yb), (lb1 - lb0) * k, 0.12 * k, { fill: '#cbd5e1', sw: 0 });
+    pen.line(SX(lb0), SY(yt), SX(lb1), SY(yt), 0.15, 'stroke-dasharray="1.2 0.9"');
+  });
+  const pts = prof.pts.map(([b, y]) => `${nn(SX(b))},${nn(SY(y))}`).join(' ');
+  pen.raw(`<polyline points="${pts}" fill="none" stroke="#000" stroke-width="0.8" stroke-linejoin="round"/>`);
+  pen.raw(`<polyline points="${prof.pts.map(([b, y]) => `${nn(SX(b))},${nn(SY(y - 0.14))}`).join(' ')}" fill="none" stroke="${OR}" stroke-width="0.45"/>`); // จันทัน
+  const yTie = lvBase(C.top) + lvHeight(C.top), peak = prof.pts.reduce((a, p) => (p[1] > a[1] ? p : a));
+  pen.raw(`<line x1="${nn(SX(B0))}" y1="${nn(SY(yTie) - 0.4)}" x2="${nn(SX(B1))}" y2="${nn(SY(yTie) - 0.4)}" stroke="${OR}" stroke-width="0.45"/>`); // ขื่อ/อะเส
+  if (peak[0] > B0 + 0.3 && peak[0] < B1 - 0.3) {
+    pen.raw(`<line x1="${nn(SX(peak[0]))}" y1="${nn(SY(peak[1] - 0.14))}" x2="${nn(SX(peak[0]))}" y2="${nn(SY(yTie))}" stroke="${OR}" stroke-width="0.4"/>`); // ดั้ง
+    for (const s of [-1, 1]) { const bm = peak[0] + s * (Math.abs((s < 0 ? B0 : B1) - peak[0]) * 0.5), yr = prof.pts.reduce((a, p) => (Math.abs(p[0] - bm) < Math.abs(a[0] - bm) ? p : a))[1]; pen.raw(`<line x1="${nn(SX(bm))}" y1="${nn(SY(yr - 0.14))}" x2="${nn(SX(peak[0] + s * 0.3))}" y2="${nn(SY(yTie))}" stroke="${OR}" stroke-width="0.3"/>`); }
+  }
+  for (const [b, y] of [prof.pts[0], prof.pts[prof.pts.length - 1]]) if (Math.abs(y - Math.min(...prof.pts.map(p => p[1]))) < 0.02) pen.rect(SX(b) - 1.2, SY(y) - 0.4, 2.4, 1.8, { fill: '#e0f2fe', sw: 0.25 });
+  const lev = (y, txt) => { pen.line(SX(prof.b1) + 2, SY(y), SX(prof.b1) + 9, SY(y), 0.12, 'stroke-dasharray="1 0.8"'); pen.text(SX(prof.b1) + 10, SY(y) + 0.8, txt, 2.1, { anchor: 'start' }); };
+  const yEave = Math.min(prof.pts[0][1], prof.pts[prof.pts.length - 1][1]);
+  [[maxY, `+${f2(maxY)} สูงสุดของหลังคา`], [yTie, `+${f2(yTie)} หัวเสา/ฝ้าชั้นบนสุด`], ...(maxY - yEave > 0.02 ? [[yEave, `+${f2(yEave)} ปลายชายคา`]] : []), [0, '±0.00 พื้นชั้น 1']]
+    .sort((a, b) => b[0] - a[0]).reduce((last, [y, txt]) => { const yy = Math.min(y, last - 3.2 / k); lev(yy, txt); return yy; }, 1e9);
+  pen.text(SX(prof.b0) + 9, SY(yEave) - 2, `∠ ${rf.pitch}°`, 2.4, { weight: 700, fill: OR, anchor: 'start' });
+  pen.text((SX(prof.b0) + SX(prof.b1)) / 2, SY(maxY) - 3, ROOF_MATS[rf.mat].name, 2.2, { weight: 700 });
+  pen.text((SX(prof.b0) + SX(prof.b1)) / 2, SY(0) + 6, 'รูปตัดหลังคา (ตัดตั้งฉากกับแนวสัน)', 3.4, { weight: 700 });
+  const W = Math.max(stack ? PW : 0, ox + (prof.b1 - prof.b0) * k + 52), H = Math.max(PH, baseY + 12);
+  return pen.svg(W, H);
+}
+function roofQtySheet(C) {
+  const q = C.qty, rf = C.rf, chk = C.checks.map(([ok, t]) => `<div><b class="${ok === null ? 'tip' : ok ? 'ok' : 'no'}">${ok === null ? '💡' : ok ? '✓' : '⚠'}</b> ${esc(t)}</div>`).join('');
+  const row = (a, b, c) => `<tr><td>${a}</td><td class="num">${b}</td><td>${c}</td></tr>`, n = v => Math.round(v).toLocaleString('th-TH');
+  return `<div class="full"><style>.mcols{display:grid;grid-template-columns:1.1fr 1fr;gap:6mm}.mcols p{margin:2mm 0;line-height:1.5}.mchk div{padding:.6mm 0;border-bottom:.2mm dashed #ddd}.mchk b.ok{color:#15803d}.mchk b.no{color:#b45309}td.num,th.num{text-align:right}</style>
+  <div class="mcols"><div><h3>🏠 ปริมาณวัสดุหลังคา</h3><table><tr><th>รายการ</th><th class="num">ปริมาณ</th><th>หมายเหตุ</th></tr>
+    ${row('พื้นที่หลังคา (ตามลาด)', `<b>${q.area.toFixed(1)}</b> ตร.ม.`, `พื้นที่แปลน ${q.plan.toFixed(1)} ÷ cos ${rf.pitch}°`)}
+    ${row(C.mat.name, `<b>${n(q.cover)}</b> ${q.coverUnit}`, q.coverUnit === 'ตร.ม.' ? 'เผื่อทับซ้อน 5%' : `~${ROOF_Q[rf.mat][0]} ${q.coverUnit}/ตร.ม. + เผื่อ 5%`)}
+    ${q.capLen > 0.01 ? row('ครอบสัน + ครอบตะเข้', q.caps ? `<b>${n(q.caps)}</b> แผ่น` : `<b>${q.capLen.toFixed(1)}</b> ม.`, `ยาวรวม ${q.capLen.toFixed(1)} ม.`) : ''}
+    ${row('แป', `≈ ${n(q.purlin)} ม.`, `ระยะแป ~${f2(q.purlinSp)} ม.`)}
+    ${row('จันทัน', `≈ ${n(q.rafters)} ตัว`, 'ทุก 1.00 ม. ตามแนวชายคา')}
+    ${row('รางน้ำฝน', `<b>${q.gutter.toFixed(1)}</b> ม.`, C.gutters.some(g => g.n > 1) ? 'รวมรางกลาง (Valley)' : 'ตามแนวชายคาด้านที่น้ำไหลลง')}
+    ${row('ท่อลงน้ำฝน PVC 3″', `<b>${q.dps}</b> จุด`, 'ปลายราง + ทุก 12 ม.')}
+    ${row('เชิงชาย + ปั้นลม', `${q.fascia.toFixed(1)} ม.`, '')}
+    ${row('ฉนวนกันความร้อน (แนะนำ)', `${q.area.toFixed(1)} ตร.ม.`, 'ใต้แผ่นหลังคา หรือบนฝ้า')}
+  </table><p><small>${esc(ROOF_TYPES[rf.type])} · ชัน ${rf.pitch}° · ชายคา ${f2(rf.overhang)} ม. · สันสูง +${f2(C.rm.yr)} ม. — ตัวเลขชุดนี้ใช้ใน 🧮 ประมาณราคา หมวดหลังคา · ขนาดหน้าตัดโครงหลังคาต้องให้วิศวกรออกแบบ</small></p></div>
+  <div><h3>ตรวจแบบหลังคา</h3><div class="mchk">${chk}</div><p><small>กติกาที่ตรวจ: ความชันขั้นต่ำตามวัสดุ (เมทัลชีท 5° · ลอนคู่/เมทัลชีทลายกระเบื้อง 10° · คอนกรีต 17° · ชิงเกิ้ล 18° · ดินเผา 25°) · ระยะชายคา · ท่อลงน้ำฝน · หลังคาต่อเติมชนชายคา · รางกลาง</small></p></div></div></div>`;
+}
+// ---------- ปริมาณงานระบบจากแบบไฟฟ้า/ประปา (ใช้ใน BOQ) ----------
+// ความยาวแนวเดินสายต่อวงจร (ม.): ต่อจุดถึงจุด (ตามแนวฉาก) + เดินกลับตู้ไฟ + สายลงจากฝ้าถึงจุดติดผนัง + ขาสวิตช์
+function elecRuns(P) {
+  const runs = new Map(), db = P.db;
+  const drop = it => CATALOG[it.type].ceiling ? 0.3 : Math.max(0.3, lvHeight(itemLevel(it)) - (it.elev || 0) - it.h / 2);
+  const man = (a, b) => Math.abs(a.x - b.x) + Math.abs(a.z - b.z) + Math.abs(lvBase(itemLevel(a)) - lvBase(itemLevel(b)));
+  for (const c of P.circuits) {
+    const byL = new Map(), ref = db || c.items[0]; let total = 0;
+    c.items.forEach(it => { const L = itemLevel(it); (byL.get(L) || byL.set(L, []).get(L)).push(it); });
+    for (const its of byL.values()) {
+      const left = [...its].sort((a, b) => man(a, ref) - man(b, ref)), chain = [left.shift()];
+      while (left.length) { const p = chain[chain.length - 1]; left.sort((a, b) => man(a, p) - man(b, p)); chain.push(left.shift()); }
+      for (let i = 0; i < chain.length - 1; i++) total += man(chain[i], chain[i + 1]);
+      total += man(chain[0], ref) + (db ? drop(db) : 0);
+    }
+    runs.set(c.id, total + c.items.reduce((a, it) => a + drop(it), 0));
+  }
+  const seenSw = new Set();
+  for (const [s, l] of P.pairs) { const id = P.byItem.get(l.id); runs.set(id, (runs.get(id) || 0) + man(s, l) + (seenSw.has(s.id) ? 0 : drop(s))); seenSw.add(s.id); }
+  return runs;
+}
+// ความยาวท่อประปาตามแนวในแบบประปา (ทุกชั้น) — ชั้นบนบวกท่อลงชั้นล่าง
+function plumbLengths() {
+  const tot = { sup: 0, hot: 0, grey: 0, soil: 0 }, k = 1000 / 75, dummy = { raw() { } };
+  state.levels.forEach((_, L) => {
+    const fx = plumbFixtures(L); if (!fx.length) return;
+    const E = slabRect(L), X = x => 40 + (x - E.x) * k, Y = z => 40 + (z - E.z) * k;
+    const r = drawPlumbOverlay(dummy, L, X, Y, k, state.house.wallThickness / 2 * k);
+    for (const t in tot) tot[t] += r.len[t] || 0;
+    if (L > 0) { const h = lvBase(L); tot.sup += h; tot.grey += h; if (fx.some(i => i.type === 'toilet')) tot.soil += h; }
+  });
+  return tot;
 }
 // เลือกมาตราส่วนมาตรฐานที่ใหญ่ที่สุดที่ยังพอดีกระดาษ
 function pickScale(needW, needH, availW, availH, pref) {
@@ -10698,6 +10886,13 @@ function buildPrintHTML(o) {
     const r = elevationsSheet(dw, dh);
     sheets.push({ title: 'รูปด้าน 4 ด้าน', s: r.s, body: r.body, notes: ['ระดับ ±0.00 = ผิวพื้นภายในบ้าน', 'ขนาดเป็นเมตร ความสูงวัดจากผิวพื้น', 'ด้านหน้า = ฝั่งล่างของแปลน (Z มากสุด)', 'ไม่ได้แสดงหลังคา กันสาด และโครงสร้าง'] });
   }
+  if (o.roof) { const C = roofCalc(); if (C) { const RS = roofSheetScale(C, dw, dh), rs = RS.s;
+    sheets.push({ title: 'แบบหลังคา', s: rs, body: roofPlanSVG(C, rs, RS.stack), notes: [
+      'เส้นหนา = สันหลังคา · เส้นกลาง = ตะเข้สัน · ลูกศรส้ม = ทิศน้ำไหล + มุมลาด · เส้นประ = แนวผนังด้านล่าง',
+      'เส้นฟ้า = รางน้ำฝน · RD = ท่อลงน้ำฝน PVC 3″ (ปลายราง + ทุก 12 ม.)',
+      `${ROOF_TYPES[C.rf.type]} · ${C.mat.name} · ชัน ${C.rf.pitch}° · ชายคา ${f2(C.rf.overhang)} ม. — ปริมาณวัสดุอยู่แผ่น "ปริมาณวัสดุหลังคา"`,
+      'ขนาดโครงหลังคา (จันทัน แป ดั้ง ค้ำยัน) ต้องให้วิศวกรออกแบบ'] });
+    sheets.push({ title: 'ปริมาณวัสดุหลังคา', body: roofQtySheet(C), notes: ['ปริมาณเป็นค่าประมาณจากแบบร่าง เผื่อเศษ 5%', 'ตรวจกับผู้ขายวัสดุหลังคาก่อนสั่ง (แต่ละยี่ห้อใช้จำนวนต่อ ตร.ม. ต่างกัน)'] }); } }
   if (o.sched) sheets.push({ title: 'ภาพ 3D และตารางประตู–หน้าต่าง', body: scheduleSheet(o.img), notes: [
     'สิ่งที่ยังไม่มีในแบบนี้: ฐานราก เสา คาน หลังคา ระบบไฟฟ้า ประปา สุขาภิบาล และรายการวัสดุ',
     'การก่อสร้างจริงต้องมีแบบก่อสร้างที่ลงนามโดยสถาปนิก/วิศวกรตามที่กฎหมายกำหนด และอาจต้องขออนุญาตก่อสร้างจากหน่วยงานท้องถิ่น'] });
@@ -10898,7 +11093,7 @@ function showPrintDialog() {
   const pj = state.project, pp = printPrefs;
   const sheetOpts = [['plan', '📐 แปลนพื้นพร้อมเส้นบอกขนาด (สำหรับช่าง)'], ['furn', '🛋️ แปลนจัดวางเฟอร์นิเจอร์'], ['elev', '🏠 รูปด้าน 4 ด้าน'],
     ['sched', '🧊 ภาพ 3D + ตารางประตู–หน้าต่าง + พื้นที่ห้อง'], ['list', '📋 รายการเฟอร์นิเจอร์'],
-    ['site', '🌳 ผังบริเวณ (ที่ดิน ระยะร่น สวน สระ รั้ว)'], ['elec', '⚡ แบบไฟฟ้า: วงจร สวิตช์→ดวงไฟ + ตารางโหลด/มิเตอร์'], ['plumb', '🚿 แบบประปา-สุขาภิบาล: แนวท่อ ถังบำบัด + ตารางสุขภัณฑ์'], ['boq', '🧮 ประมาณการวัสดุและราคา + งวดงาน']];
+    ['site', '🌳 ผังบริเวณ (ที่ดิน ระยะร่น สวน สระ รั้ว)'], ['elec', '⚡ แบบไฟฟ้า: วงจร สวิตช์→ดวงไฟ + ตารางโหลด/มิเตอร์'], ['plumb', '🚿 แบบประปา-สุขาภิบาล: แนวท่อ ถังบำบัด + ตารางสุขภัณฑ์'], ['roof', '🏠 แบบหลังคา: แปลนหลังคา รูปตัด รางน้ำ ท่อลง + ปริมาณวัสดุ'], ['boq', '🧮 ประมาณการวัสดุและราคา + งวดงาน']];
   const tf = (id, label, v, ph = '') => `<div class="field"><label for="${id}">${label}</label><input class="inp" id="${id}" maxlength="80" value="${esc(v)}" placeholder="${ph}"></div>`;
   openModal('🖨️ พิมพ์แบบบ้าน', `
     <div class="warnbox">⚠️ <b>แบบที่พิมพ์เป็น "แบบร่าง" สำหรับคุยกับช่างและผู้ออกแบบ</b> — มีมาตราส่วนจริง ขนาดห้อง ตำแหน่งประตู–หน้าต่าง และรูปด้าน
@@ -10925,7 +11120,7 @@ function appendOtherHousesSheets(html, o) {
   const home = state.houseId, keepLv = curLevel, keepSel = sel, cam = { p: perspCam.position.clone(), t: orbit.target.clone() };
   const extra = [];
   const opt = { ...o, site: false, boq: false };
-  if (!['plan', 'furn', 'elec', 'plumb', 'elev', 'sched', 'list'].some(k => opt[k])) return html;
+  if (!['plan', 'furn', 'elec', 'plumb', 'roof', 'elev', 'sched', 'list'].some(k => opt[k])) return html;
   try {
     for (const h of [...state.others]) {
       activateHouse(h.id, { silent: true });
@@ -11076,14 +11271,29 @@ const PRICE_LIST = {
   railing:     ['ราวกันตกเหล็ก', 'เมตร', 1500, '≈'],
   elec:        ['งานระบบไฟฟ้า + ดวงโคม ปลั๊ก สวิตช์ (เหมาตามพื้นที่)', 'ตร.ม.', 900, '≈'],
   elec_main:   ['สายเมน ท่อร้อยสาย ตู้ไฟ สายดิน (เหมาตามพื้นที่)', 'ตร.ม.', 250, '≈'],
-  elec_point:  ['จุดไฟฟ้า (ปลั๊ก/สวิตช์/ดวงไฟ เดินสายร้อยท่อ)', 'จุด', 800, 'ร้าน'],
+  elec_point:  ['จุดไฟฟ้า: ค่าแรงติดตั้ง + บ็อกซ์ หน้ากาก (สายและท่อคิดแยก)', 'จุด', 450, '≈'],
+  elec_feed:   ['สายเมน + เมนเบรกเกอร์ + หลักดิน (ต่อจากมิเตอร์)', 'ชุด', 6500, '≈'],
+  mcb:         ['เบรกเกอร์ลูกย่อย MCB 1P', 'ตัว', 220, 'ร้าน'],
+  rcbo:        ['เบรกเกอร์กันดูด RCBO', 'ตัว', 1200, 'ร้าน'],
+  wire15:      ['สายไฟ THW 1.5 มม²', 'เมตร', 9, 'ร้าน'],
+  wire25:      ['สายไฟ THW 2.5 มม²', 'เมตร', 14, 'ร้าน'],
+  wire4:       ['สายไฟ THW 4 มม²', 'เมตร', 22, 'ร้าน'],
+  wire6:       ['สายไฟ THW 6 มม²', 'เมตร', 32, 'ร้าน'],
+  conduit:     ['ท่อร้อยสายไฟ PVC/EMT + ข้อต่อ', 'เมตร', 30, 'ร้าน'],
   light_fix:   ['โคมไฟ / หลอด LED', 'ดวง', 350, '≈'],
   solar:       ['ระบบโซลาร์เซลล์ออนกริด (แผง อินเวอร์เตอร์ ติดตั้ง ขออนุญาต)', 'kWp', 35000, '≈'],
   ev_charger:  ['เครื่องชาร์จรถไฟฟ้า Wall charger 7kW + เดินสาย/ติดตั้ง', 'เครื่อง', 35000, '≈'],
   wifi_ap:     ['จุด Wi‑Fi (Access Point ติดเพดาน + สาย LAN)', 'จุด', 2800, '≈'],
-  ac_point:    ['จุดแอร์ (เดินสาย + เบรกเกอร์ + ท่อน้ำทิ้ง ไม่รวมตัวแอร์)', 'จุด', 2500, '≈'],
+  ac_point:    ['จุดแอร์: ค่าแรง + ท่อน้ำทิ้ง + ขาแขวน (สาย/เบรกเกอร์คิดแยก ไม่รวมตัวแอร์)', 'จุด', 1500, '≈'],
   db_panel:    ['ตู้ควบคุมไฟฟ้า (Consumer unit) + เบรกเกอร์', 'ตู้', 4500, '≈'],
   plumb:       ['งานประปา-สุขาภิบาล (ต่อจุด)', 'จุด', 2000, '≈'],
+  plumb_pt:    ['จุดประปา: ค่าแรงต่อสุขภัณฑ์ + ข้อต่อ วาล์ว (ท่อคิดแยก)', 'จุด', 900, '≈'],
+  pipe_sup:    ['ท่อน้ำดี PVC ½–¾″ ชั้น 13.5 + ข้อต่อ', 'เมตร', 45, 'ร้าน'],
+  pipe_hot:    ['ท่อน้ำร้อน PPR ½″ + ข้อต่อ', 'เมตร', 95, 'ร้าน'],
+  pipe_drain:  ['ท่อน้ำทิ้ง PVC 2″ + ข้อต่อ', 'เมตร', 85, 'ร้าน'],
+  pipe_soil:   ['ท่อโสโครก PVC 4″ + ข้อต่อ', 'เมตร', 170, 'ร้าน'],
+  manhole:     ['บ่อพักคอนกรีต + ฝา', 'บ่อ', 1800, '≈'],
+  grease_trap: ['บ่อดักไขมัน', 'ชุด', 2500, 'ร้าน'],
   septic:      ['ถังบำบัดน้ำเสีย', 'ชุด', 10000, '≈'],
   toilet:      ['ชักโครก', 'ชุด', 2200, 'ร้าน'],
   basin:       ['อ่างล้างหน้า + ก๊อก', 'ชุด', 1800, 'ร้าน'],
@@ -11404,10 +11614,11 @@ function computeEstimate(over = {}) {
     const rf = state.roof;
     info(`${ROOF_TYPES[rf.type]} ชัน ${rf.pitch}° ชายคา ${f2(rf.overhang)} ม. · พื้นที่หลังคา ${rm.area.toFixed(1)} ตร.ม. (พื้นที่ราบ ${rm.planA.toFixed(1)})`);
     add('roof_frame', up(rm.area, 1));
-    add(ROOF_MATS[rf.mat].price, up(rm.area * 1.05, 1), 'เผื่อทับซ้อน 5%');
+    const RC = roofCalc();
+    add(ROOF_MATS[rf.mat].price, up(rm.area * 1.05, 1), `เผื่อทับซ้อน 5%${RC && RC.qty.coverUnit !== 'ตร.ม.' ? ` · ≈ ${RC.qty.cover.toLocaleString('th-TH')} ${RC.qty.coverUnit}` : ''}`);
     add('roof_insul', up(rm.area, 1));
     add('ridge_cap', up(rm.ridge + rm.hips, 1));
-    add('gutter', up(rm.eave, 1)); add('fascia', up(rm.eave + rm.rake, 1));
+    add('gutter', up(RC ? RC.qty.gutter : rm.eave, 1), RC ? `ท่อลงน้ำฝน ${RC.qty.dps} จุด (ตามแบบหลังคา)` : ''); add('fascia', up(rm.eave + rm.rake, 1));
   } else info(`ดาดฟ้าพื้นคอนกรีต ${roofA.toFixed(0)} ตร.ม. (คิดรวมในงานโครงสร้างและกันซึมแล้ว)`);
   add('railing', up(state.items.filter(i => i.type === 'railing').reduce((a, i) => a + i.w, 0), 1));
 
@@ -11415,14 +11626,28 @@ function computeEstimate(over = {}) {
   // ไฟฟ้า: ถ้าวางจุดไฟฟ้าในแบบแล้ว คิดตามจำนวนจุดจริง ไม่เช่นนั้นคิดเหมาตามพื้นที่
   const nOut = cnt('outlet'), nSw = cnt('switch'), nLight = cnt('light') + cnt('ceiling_fan'), nAc = cnt('ac_indoor');
   if (nOut + nSw + nLight > 0) {
-    add('elec_main', up(usableArea(), 1), 'พื้นที่ใช้สอยรวม');
+    // คิดตามแบบไฟฟ้า: วงจร เบรกเกอร์ ความยาวสายแต่ละขนาด ท่อร้อยสาย (แทนการเหมาตามพื้นที่)
+    const EP = elecPlan(), runs = elecRuns(EP), wires = {}; let cond = 0, mcb = 0, rcbo = 0;
+    EP.circuits.forEach(c => { const r = runs.get(c.id) || 0; wires[c.wire] = (wires[c.wire] || 0) + r * 3 * 1.1; cond += r * 1.1; if (c.br.includes('RCBO')) rcbo++; else mcb++; });
+    add('elec_feed', 1, `มิเตอร์ ${EP.meter} · เมนเบรกเกอร์ ${EP.main}A · สายเมน ${EP.mainWire} มม² (ไม่รวมค่าธรรมเนียมการไฟฟ้า)`);
+    add('db_panel', Math.max(1, cnt('db_panel')), `${EP.ways} ช่อง · ${EP.circuits.length} วงจร`);
+    add('mcb', mcb, 'ลูกย่อยตามตารางวงจร'); add('rcbo', rcbo, 'ปลั๊กห้องน้ำ / เครื่องทำน้ำอุ่น (กันดูด)');
+    for (const [sz, code] of [['1.5', 'wire15'], ['2.5', 'wire25'], ['4', 'wire4'], ['6', 'wire6']]) add(code, up(wires[sz] || 0), 'L + N + สายดิน ตามแนวเดินสาย + เผื่อ 10%');
+    add('conduit', up(cond), 'ตามแนวเดินสายในแบบไฟฟ้า');
     add('elec_point', nOut + nSw + nLight, `ปลั๊ก ${nOut} · สวิตช์ ${nSw} · ดวงไฟ/พัดลม ${nLight}`);
-    add('light_fix', cnt('light')); add('ac_point', nAc, `${nAc} จุด`); add('wifi_ap', cnt('wifi')); add('db_panel', Math.max(1, cnt('db_panel')));
+    add('light_fix', cnt('light')); add('ac_point', nAc, `${nAc} จุด`); add('wifi_ap', cnt('wifi'));
   } else add('elec', up(usableArea(), 1), 'ยังไม่ได้วางจุดไฟฟ้าในแบบ — คิดเหมาตามพื้นที่ใช้สอย');
-  add('plumb', cnt('toilet') + cnt('basin') + cnt('shower') + sinks + cnt('water_point') + cnt('floor_drain'), 'จุดน้ำดี/น้ำทิ้ง (สุขภัณฑ์ + จุดที่วางในแบบ)');
+  const fxAll = state.levels.flatMap((_, L) => plumbFixtures(L)), PS = plumbSizes();
+  if (fxAll.length) { // คิดตามแบบประปา: ความยาวท่อแต่ละชนิด บ่อพัก บ่อดักไขมัน
+    const PL = plumbLengths(), m = v => up(v * 1.15);
+    add('plumb_pt', fxAll.length, `สุขภัณฑ์ ท่อพื้น ก๊อก เครื่องทำน้ำอุ่น ${fxAll.length} จุด`);
+    add('pipe_sup', m(PL.sup), 'ตามแนวท่อในแบบประปา + เผื่อ 15%'); add('pipe_hot', m(PL.hot)); add('pipe_drain', m(PL.grey)); add('pipe_soil', m(PL.soil));
+    add('manhole', Math.max(cnt('manhole'), 1), cnt('manhole') ? '' : 'แนะนำ (ยังไม่มีในแบบ)');
+    if (sinks) add('grease_trap', Math.max(cnt('grease_trap'), 1), cnt('grease_trap') ? '' : 'แนะนำ (ยังไม่มีในแบบ)');
+  }
   add('heater', cnt('heater')); if (solarInfo.kwp) add('solar', up(solarInfo.kwp, 2), `${solarInfo.placed} แผง × ${PANEL.watt} W · ผลิต ≈ ${Math.round(solarInfo.kwh).toLocaleString('th-TH')} หน่วย/ปี`); add('ev_charger', cnt('ev_charger'), 'มักต้องขอเพิ่มขนาดมิเตอร์ไฟ (เช่น 30(100)A) แยกต่างหาก');
-  add('septic', cnt('toilet') ? 1 : 0);
-  add('toilet', cnt('toilet')); add('basin', cnt('basin')); add('shower', cnt('shower')); add('sink', sinks); add('tank', cnt('water_tank') + cnt('tank_pump'));
+  add('septic', cnt('toilet') ? Math.max(1, cnt('septic_tank')) : 0, cnt('toilet') ? `ขนาด ~${PS.septic.toLocaleString('th-TH')} ล. สำหรับ ~${PS.persons} คน${cnt('septic_tank') ? '' : ' · แนะนำ (ยังไม่มีในแบบ)'}` : '');
+  add('toilet', cnt('toilet')); add('basin', cnt('basin')); add('shower', cnt('shower')); add('sink', sinks); add('tank', cnt('water_tank') + cnt('tank_pump') || (cnt('toilet') ? 1 : 0), cnt('water_tank') + cnt('tank_pump') ? '' : `แนะนำ ${PS.tank.toLocaleString('th-TH')} ล. (ยังไม่มีในแบบ)`);
   add('counter', up(state.items.filter(i => i.type === 'counter').reduce((a, i) => a + i.w, 0), 1), 'ตามความยาวเคาน์เตอร์ในแบบ');
 
   const openA = Math.max(0, siteArea() - groundA - hardA);
@@ -12051,6 +12276,7 @@ const MANUAL = [
       <li><b>🛒 ซื้อของ</b> — พิมพ์ใบรายการซื้อของแบบมีช่องติ๊ก ถือไปร้านวัสดุได้</li>
       <li><b>🖨️ พิมพ์แบบ</b> (${K('Ctrl', 'P')}) — แปลนพร้อมเส้นบอกขนาด แปลนเฟอร์นิเจอร์ รูปด้าน 4 ด้าน ตารางประตู–หน้าต่าง •
         <b>⚡ แบบไฟฟ้า</b> (เส้นสวิตช์→ดวงไฟ วงจร C1, C2… กลับตู้ไฟ จำนวนจุดต่อห้อง) • <b>🚿 แบบประปา-สุขาภิบาล</b> (ท่อน้ำดี/น้ำร้อน/น้ำทิ้ง/โสโครก ถังบำบัด บ่อพัก บ่อดักไขมัน ขนาดท่อ) •
+        <b>🏠 แบบหลังคา</b> (แปลนหลังคา สัน ตะเข้ ทิศน้ำไหล รางน้ำ ท่อลงน้ำฝน + รูปตัด + แผ่นปริมาณวัสดุและตรวจแบบ เช่น ความชันต่ำกว่าวัสดุ หลังคาโรงจอดชนชายคา) •
         แผ่น <b>ตารางไฟฟ้า-ประปา</b>: ตารางวงจร/โหลด ขนาดมิเตอร์ เบรกเกอร์ สาย + ตารางสุขภัณฑ์ ขนาดถัง และ <b>ตรวจจุดที่ขาด</b> (ห้องนอนไม่มีปลั๊ก ไฟไม่มีสวิตช์ ห้องน้ำไม่มีท่อพื้น ฯลฯ) •
         อยากจัดวงจรเอง: เลือกปลั๊ก/ดวงไฟ แล้วตั้ง <b>ชื่อกลุ่มวงจร</b> ในแผงขวา • ตอนพิมพ์ตั้ง <b>ขนาดจริง / 100%</b> มาตราส่วนจึงถูกต้อง • เลือก "บันทึกเป็น PDF" เพื่อส่งไฟล์</li>
       <li><b>🖼️ ภาพ PNG</b> — บันทึกภาพมุมที่เห็นอยู่ • <b>🔗 แชร์</b> — ได้ลิงก์ให้คนอื่นเปิดดูแบบนี้</li>
