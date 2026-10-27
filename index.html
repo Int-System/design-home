@@ -657,6 +657,14 @@ kbd{display:inline-block;border:1px solid #cbd5e1;border-bottom-width:2px;border
 .dtool:hover{background:#f1f5f9}.dtool.on{background:#dbeafe}
 .dtool .ic{font-size:19px;width:26px;text-align:center}.dtool b{display:block;font-size:13.5px;font-weight:600}.dtool small{display:block;font-size:11.5px;color:#64748b}
 @media (max-width:760px){.drawpop{width:240px}}
+.hlpop{position:absolute;z-index:40;background:#fff;border:1px solid var(--line);border-radius:14px;box-shadow:var(--shadow);padding:10px 12px;width:290px;font-size:13px;display:flex;flex-direction:column;gap:4px}
+.hlpop[hidden]{display:none}.hlpop .hlh{font-weight:600;margin-bottom:2px}.hlpop label{display:flex;align-items:center;gap:7px;cursor:pointer;padding:2px 0}
+.hlpop label i{width:11px;height:11px;border-radius:3px;display:inline-block;flex:none}
+.hlpop .hlbtn{margin-top:6px;border:1px solid #cbd5e1;background:#f8fafc;border-radius:10px;padding:7px 10px;font:inherit;font-weight:600;cursor:pointer}.hlpop .hlbtn:hover{background:#eff6ff}
+.hlpop .hlnote{font-size:11.5px;color:#64748b;line-height:1.5}
+.seg3{display:flex;gap:6px;flex-wrap:wrap}.seg3 button{flex:1;min-width:110px;border:1px solid #cbd5e1;background:#fff;border-radius:10px;padding:7px 6px;font:inherit;font-size:13px;cursor:pointer}
+.seg3 button.on{border-color:#2563eb;background:#eff6ff;color:#1d4ed8;font-weight:600}
+.glbck{display:grid;grid-template-columns:1fr 1fr;gap:2px 12px}@media (max-width:560px){.glbck{grid-template-columns:1fr}}
 </style>
 
 <!-- โหลด Three.js จาก CDN แบบระบุเวอร์ชันแน่นอน (r160) -->
@@ -683,6 +691,7 @@ kbd{display:inline-block;border:1px solid #cbd5e1;border-bottom-width:2px;border
       <button class="tbtn" id="b_print" title="พิมพ์แบบ / บันทึก PDF ให้ช่าง (Ctrl+P)"><span class="ic">🖨️</span>พิมพ์แบบ</button>
       <button class="tbtn" id="b_report" title="รายงานลูกค้า: ปก ภาพบ้าน แปลนพร้อมขนาด ห้องและวัสดุ BOQ — PDF ไฟล์เดียว"><span class="ic">📑</span>รายงาน</button>
       <button class="tbtn" id="b_png" title="บันทึกภาพหน้าจอเป็น PNG"><span class="ic">🖼️</span>ภาพ PNG</button>
+      <button class="tbtn" id="b_glb" title="ส่งออกโมเดล 3D (.glb) — เปิดในมือถือ (AR) / Windows 3D Viewer / SketchUp / Blender"><span class="ic">📦</span>โมเดล 3D (.glb)</button>
       <button class="tbtn" id="b_list" title="รายการสิ่งของทั้งหมด"><span class="ic">📋</span>รายการ</button>
       <button class="tbtn hl" id="b_est" title="ประมาณวัสดุและราคาก่อสร้าง"><span class="ic">🧮</span>ประมาณราคา</button>
       <button class="tbtn" id="b_shop" title="พิมพ์รายการของที่ต้องซื้อ"><span class="ic">🛒</span>ซื้อของ</button>
@@ -942,6 +951,9 @@ const CATALOG = {
   heater:       { cat: 'mep', name: 'เครื่องทำน้ำอุ่น', icon: '♨️', w: 25, d: 10, h: 40, elev: 140, color: '#ffffff', onWall: true, mep: 'heater' },
   wifi:         { cat: 'mep', name: 'จุดติดตั้ง Wi‑Fi (Access Point)', icon: '📶', w: 22, d: 22, h: 4, color: '#f8fafc', ceiling: true, mep: 'wifi' },
   db_panel:     { cat: 'mep', name: 'ตู้ไฟ / เบรกเกอร์', icon: '🗃️', w: 30, d: 10, h: 40, elev: 150, color: '#e5e7eb', onWall: true, mep: 'db' },
+  septic_tank:  { cat: 'mep', name: 'ถังบำบัดน้ำเสีย (ฝังดิน)', icon: '🛢️', w: 120, d: 120, h: 100, color: '#a8a29e', outdoor: true, mep: 'septic' },
+  manhole:      { cat: 'mep', name: 'บ่อพัก (ฝาคอนกรีต)', icon: '🔲', w: 60, d: 60, h: 6, color: '#a8a29e', outdoor: true, mep: 'mh' },
+  grease_trap:  { cat: 'mep', name: 'บ่อดักไขมัน', icon: '🟫', w: 50, d: 40, h: 6, color: '#9ca3af', outdoor: true, mep: 'gt' },
   railing:      { cat: 'structure', name: 'ราวกันตก', icon: '🛤️', w: 200, d: 5, h: 110, color: '#3f3f46' },
   opening:      { cat: 'structure', name: 'ช่องเปิดโล่ง', icon: '⬜', w: 250, d: 10, h: 240, color: '#93c5fd', wall: true, kind: 'opening' },
   wall_extra:   { cat: 'structure', name: 'ผนังเพิ่มเติม', icon: '🧱', w: 200, d: 15, h: 280, color: '#f3efe6' },
@@ -1519,7 +1531,7 @@ function normalizeState(s) {
       x: num(it.x, house.width / 2, XB[0], XB[1]), z: num(it.z, house.depth / 2, ZB[0], ZB[1]),
       rot: normDeg(num(it.rot, 0, -3600, 3600)),
       w: num(it.w, c.w / 100, 0.01, 40), d: num(it.d, c.d / 100, 0.01, 40), h: num(it.h, c.h / 100, 0.005, 10),
-      elev: num(it.elev, (c.elev || 0) / 100, 0, 15), color: isHex(it.color) ? it.color.toLowerCase() : c.color, ...(isHex(it.color2) ? { color2: it.color2.toLowerCase() } : {}),
+      elev: num(it.elev, (c.elev || 0) / 100, 0, 15), color: isHex(it.color) ? it.color.toLowerCase() : c.color, ...(isHex(it.color2) ? { color2: it.color2.toLowerCase() } : {}), ...(typeof it.circuit === 'string' && it.circuit.trim() ? { circuit: it.circuit.trim().slice(0, 30) } : {}),
       level: Math.round(num(it.level, 0, 0, lvCount - 1)) };
   });
   const p = s.project || {}, str = (v, d) => (typeof v === 'string' ? v.slice(0, 80) : d);
@@ -2686,6 +2698,183 @@ function rebuildBwDims() {
     dimChain([S.lo, S.hi], S.axis, S.c, S.sgn * (0.7 + row * 0.65), S.c);
   }
 }
+/* ---------- ป้ายความสูงติดตั้ง (แปลนขาว-ดำ) — ตัวเลขเป็นเมตร วัดจากพื้นห้องที่ปูเสร็จ (±0.00) ----------
+   หน้าต่าง = ขอบล่าง–ขอบบน • ประตู = ส.ความสูงบาน • ของติดผนัง/เพดาน = +ระดับใต้ของ • คลิกป้าย = เลือกของชิ้นนั้น */
+const HL_CATS = [
+  ['win', 'หน้าต่าง (ขอบล่าง–ขอบบน)', '#1d4ed8', '#eff6ff', 'หน้าต่าง'], ['door', 'ประตู / ช่องเปิด', '#15803d', '#f0fdf4', 'ประตู'],
+  ['out', 'ปลั๊กไฟ', '#c2410c', '#fff7ed', 'ปลั๊ก'], ['sw', 'สวิตช์ไฟ', '#7e22ce', '#faf5ff', 'สวิตช์'],
+  ['ac', 'แอร์ (ใต้เครื่อง)', '#0e7490', '#ecfeff', 'แอร์'], ['ht', 'เครื่องทำน้ำอุ่น / ก๊อกน้ำ', '#b91c1c', '#fef2f2', 'น้ำอุ่น/ก๊อก'],
+  ['db', 'ตู้ไฟ / ตู้แขวน / ของติดผนัง', '#334155', '#f1f5f9', ''], ['ceil', 'ดวงไฟ / พัดลม / Wi‑Fi เพดาน', '#a16207', '#fefce8', 'เพดาน'],
+];
+const HL_C = Object.fromEntries(HL_CATS.map(c => [c[0], c])), HL_ALL = new Set(HL_CATS.map(c => c[0]));
+let hlOn = false, hlCats = new Set(['win', 'door', 'out', 'sw', 'ac', 'ht', 'db']);
+try { const v = JSON.parse(localStorage.getItem('homeDesigner3D.hl') || 'null'); if (v) { hlOn = !!v.on; if (Array.isArray(v.cats)) hlCats = new Set(v.cats.filter(k => HL_C[k])); } } catch (e) { }
+const saveHL = () => { try { localStorage.setItem('homeDesigner3D.hl', JSON.stringify({ on: hlOn, cats: [...hlCats] })); } catch (e) { } };
+const hlGroup = new THREE.Group(); hlGroup.visible = false; scene.add(hlGroup);
+let hlKey = '';
+const f2m = v => (Math.round(v * 100) / 100).toFixed(2);
+function hlCat(it) {
+  const C = CATALOG[it.type]; if (!C) return null;
+  if (C.wall) return C.kind === 'window' ? 'win' : 'door';
+  if (C.ceiling) return 'ceil';
+  if (!C.onWall || (it.elev || 0) < 0.05) return null; // ผ้าม่านตั้งพื้น ไม่ต้องบอกระดับ
+  return { outlet: 'out', switch: 'sw', ac_indoor: 'ac', heater: 'ht', water_point: 'ht' }[it.type] || 'db';
+}
+function hlText(it, cat) {
+  const e = it.elev || 0;
+  if (cat === 'win') return `${f2m(e)}–${f2m(e + it.h)}`;
+  if (cat === 'door') return `${CATALOG[it.type].kind === 'opening' ? 'ช่อง ' : 'ส.'}${f2m(e + it.h)}`;
+  return `+${f2m(e)}`;
+}
+// ของที่ติดป้ายได้บนชั้น L (ในตัวบ้าน + บนผนังนอก)
+function hlItems(L, cats = hlCats) {
+  const R = lvRect(L), m = 0.6;
+  return state.items.filter(it => itemLevel(it) === L && it.x > R.x - m && it.x < R.x + R.w + m && it.z > R.z - m && it.z < R.z + R.d + m)
+    .map(it => ({ it, cat: hlCat(it) })).filter(o => o.cat && cats.has(o.cat));
+}
+const _hlTex = new Map();
+function hlSprite(txt, cat) {
+  const key = cat + '|' + txt; let t = _hlTex.get(key);
+  if (!t) {
+    const [, , fg, bg] = HL_C[cat], F = "700 40px 'IBM Plex Sans Thai', Tahoma, sans-serif", c = document.createElement('canvas'), x = c.getContext('2d'); x.font = F;
+    const w = Math.ceil(x.measureText(txt).width) + 30, h = 58; c.width = w; c.height = h;
+    const r = ['out', 'sw'].includes(cat) ? h / 2 - 3 : 10;
+    x.beginPath(); x.roundRect ? x.roundRect(3, 3, w - 6, h - 6, r) : x.rect(3, 3, w - 6, h - 6);
+    x.fillStyle = bg; x.fill(); x.lineWidth = 4; x.strokeStyle = fg; x.stroke();
+    x.font = F; x.fillStyle = fg; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(txt, w / 2, h / 2 + 2);
+    t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.userData = { aspect: w / h }; _hlTex.set(key, t);
+  }
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({ map: t, depthTest: false, transparent: true }));
+  const hh = 0.24; sp.scale.set(hh * t.userData.aspect, hh, 1); sp.renderOrder = 1012;
+  return sp;
+}
+const _hlMat = new Map(), _hlDot = new THREE.CircleGeometry(0.045, 14).rotateX(-Math.PI / 2);
+const hlMat = (cat, line) => { const k = cat + (line ? 'l' : 'd'); let m = _hlMat.get(k); if (!m) { const o = { color: HL_C[cat][2], depthTest: false, transparent: true }; m = line ? new THREE.LineBasicMaterial(o) : new THREE.MeshBasicMaterial(o); _hlMat.set(k, m); } return m; };
+function rebuildHeightLabels() {
+  hlGroup.children.forEach(o => { if (o.isSprite) o.material.dispose(); else if (o.isLineSegments) o.geometry.dispose(); });
+  hlGroup.clear();
+  const L = curLevel, R = lvRect(L);
+  hlGroup.position.y = lvBase(L) + 0.1;
+  const order = { win: 0, door: 1, ac: 2, db: 3, ht: 4, sw: 5, out: 6, ceil: 7 };
+  const list = hlItems(L).sort((a, b) => order[a.cat] - order[b.cat]), placed = [], lines = new Map();
+  const wpp = camera === orthoCam ? orthoSize / orthoCam.zoom / Math.max(1, vh) : 0; // เมตรต่อพิกเซลจอ
+  if (wpp) for (const lb of roomLabels) if (lb.pos) placed.push({ x: lb.pos.x, z: lb.pos.z, hw: (lb.el.offsetWidth || 160) / 2 * wpp, hd: (lb.el.offsetHeight || 40) / 2 * wpp }); // ไม่ทับป้ายชื่อห้อง
+  for (const { it, cat } of list) {
+    const th = (it.rot || 0) * Math.PI / 180, tx = Math.cos(th), tz = -Math.sin(th);
+    let nx = Math.sin(th), nz = Math.cos(th); // ด้านหน้าของ (ของติดผนัง: หันเข้าห้อง)
+    if (CATALOG[it.type].wall) { // ช่องในผนัง: ผนังนอก = ป้ายอยู่ในบ้าน • ผนังใน = ฝั่งหน้าบาน
+      const px = it.x + nx * 0.5, pz = it.z + nz * 0.5;
+      if (px < R.x || px > R.x + R.w || pz < R.z || pz > R.z + R.d) { nx = -nx; nz = -nz; }
+    }
+    if (cat === 'ceil') { nx = 0; nz = 1; }
+    const sp = hlSprite(hlText(it, cat), cat), hw = sp.scale.x / 2 + 0.03, hd = sp.scale.y / 2 + 0.03;
+    const off = (cat === 'ceil' ? 0.3 : cat === 'win' || cat === 'door' ? 0.42 : 0.36) + Math.abs(nx) * (hw - hd); // ผนังด้านข้าง: ป้ายกว้าง ต้องห่างผนังมากขึ้น
+    const free = (x, z) => placed.every(p => Math.abs(p.x - x) > p.hw + hw || Math.abs(p.z - z) > p.hd + hd);
+    const bx = it.x + nx * off, bz = it.z + nz * off; let at = [bx, bz];
+    if (!free(bx, bz)) { // ชนป้ายอื่น → เลื่อนตามแนวผนังหรือออกห่างผนัง
+      found: for (let k = 1; k <= 8; k++) for (const [a, b, st] of [[tx, tz, 0.3], [-tx, -tz, 0.3], [nx, nz, 0.2]]) {
+        const x = bx + a * st * k, z = bz + b * st * k; if (free(x, z)) { at = [x, z]; break found; }
+      }
+    }
+    placed.push({ x: at[0], z: at[1], hw, hd });
+    sp.position.set(at[0], 0.02, at[1]); sp.userData.hlItem = it.id; hlGroup.add(sp);
+    (lines.get(cat) || lines.set(cat, []).get(cat)).push(new THREE.Vector3(it.x, 0, it.z), new THREE.Vector3(at[0], 0, at[1]));
+    const d = new THREE.Mesh(_hlDot, hlMat(cat)); d.position.set(it.x, 0, it.z); d.renderOrder = 1011; d.raycast = () => { }; hlGroup.add(d);
+  }
+  for (const [cat, pts] of lines) { const l = new THREE.LineSegments(new THREE.BufferGeometry().setFromPoints(pts), hlMat(cat, true)); l.renderOrder = 1010; l.raycast = () => { }; hlGroup.add(l); }
+}
+// ทุกเฟรม (แปลนขาว-ดำ): สร้างป้ายใหม่เมื่อของเปลี่ยน (ย้าย หมุน แก้ความสูง) / เปลี่ยนชั้น / เปลี่ยนชนิดป้าย
+function updateHeightLabels(bw) {
+  hlGroup.visible = bw && hlOn;
+  if (!hlGroup.visible) return;
+  const wpp = camera === orthoCam ? Math.round(orthoSize / orthoCam.zoom / Math.max(1, vh) * 4000) : 0;
+  const key = curLevel + '|' + wpp + '|' + roomLabels.length + roomsOf(curLevel).map(r => r.x + r.z + r.w + r.d).join() + '|' + [...hlCats].join() + '|' + hlItems(curLevel).map(({ it }) => `${it.id}:${it.x.toFixed(2)},${it.z.toFixed(2)},${it.rot || 0},${it.elev || 0},${it.h}`).join(';');
+  if (key !== hlKey) { hlKey = key; rebuildHeightLabels(); }
+}
+function pickHeightLabel() { // ใช้ raycaster ที่ setRay ตั้งไว้แล้ว
+  if (!hlGroup.visible) return null;
+  const h = raycaster.intersectObjects(hlGroup.children.filter(o => o.isSprite))[0];
+  return h ? h.object.userData.hlItem : null;
+}
+// ตัวเลือกชนิดป้าย (ใต้ปุ่ม ⚙️ บนแถบแปลน)
+function toggleHLPop(btn) {
+  let p = document.getElementById('hlPop');
+  if (p && !p.hidden) { p.hidden = true; return; }
+  if (!p) {
+    p = document.createElement('div'); p.id = 'hlPop'; p.className = 'hlpop'; p.hidden = true; $('#viewport').appendChild(p);
+    p.addEventListener('change', e => { const k = e.target.dataset.hc; if (!k) return; if (e.target.checked) hlCats.add(k); else hlCats.delete(k); saveHL(); });
+    p.addEventListener('click', e => { if (e.target.closest('[data-ha]')) { p.hidden = true; showHeightTable(); } });
+    document.addEventListener('pointerdown', e => { if (!p.hidden && !p.contains(e.target) && !e.target.closest('[data-k="hlset"]')) p.hidden = true; }, true);
+  }
+  p.innerHTML = `<div class="hlh">แสดงความสูงของ</div>` + HL_CATS.map(([k, t, fg]) => `<label><input type="checkbox" data-hc="${k}" ${hlCats.has(k) ? 'checked' : ''}><i style="background:${fg}"></i>${t}</label>`).join('')
+    + `<button type="button" class="hlbtn" data-ha="table">📋 ตารางความสูง / พิมพ์ให้ช่าง</button><div class="hlnote">หน่วยเมตร วัดจากพื้นห้อง (±0.00) • คลิกป้าย = เลือกของชิ้นนั้น แล้วแก้ "ความสูงจากพื้น" ได้</div>`;
+  const br = btn.getBoundingClientRect(), vr = $('#viewport').getBoundingClientRect();
+  p.style.left = Math.max(8, Math.min(br.left - vr.left, vr.width - 300)) + 'px'; p.style.top = (br.bottom - vr.top + 6) + 'px'; p.hidden = false;
+}
+// ตารางความสูง: รวมชนิด + ระดับเดียวกัน
+function heightRows(levels, cats = hlCats) {
+  const g = new Map(), multi = levels.length > 1;
+  for (const L of levels) for (const { it, cat } of hlItems(L, cats)) {
+    const C = CATALOG[it.type], e = it.elev || 0, top = e + it.h;
+    const val = cat === 'win' ? `ขอบล่าง ${f2m(e)} · ขอบบน ${f2m(top)}` : cat === 'door' ? `สูง ${f2m(top)}` : `+${f2m(e)}${cat === 'ac' ? ' (ใต้เครื่อง)' : ''}`;
+    const key = [cat, C.name, val, multi ? L : ''].join('|');
+    const r = g.get(key) || { cat, name: C.name, val, L, e, top, n: 0 }; r.n++; g.set(key, r);
+  }
+  const order = HL_CATS.map(c => c[0]);
+  return [...g.values()].sort((a, b) => (multi ? a.L - b.L : 0) || order.indexOf(a.cat) - order.indexOf(b.cat) || a.e - b.e);
+}
+function heightTableHTML(levels, cls = 'boq') {
+  const rows = heightRows(levels), multi = levels.length > 1;
+  if (!rows.length) return '<p>ยังไม่มีประตู หน้าต่าง หรือของติดผนังในแบบ (หรือปิดป้ายทุกชนิดไว้)</p>';
+  return `<table class="${cls}"><tr><th>รายการ</th>${multi ? '<th>ชั้น</th>' : ''}<th>ความสูงจากพื้นห้อง (ม.)</th><th style="text-align:right">จำนวน</th></tr>`
+    + rows.map(r => `<tr><td><span style="display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px;vertical-align:-1px;background:${HL_C[r.cat][2]}"></span>${esc(r.name)}</td>${multi ? `<td>${esc(lvName(r.L))}</td>` : ''}<td>${r.val}</td><td style="text-align:right">${r.n}</td></tr>`).join('') + '</table>';
+}
+// รูปตัดผนังอธิบายระดับ (ค่าจริงจากแบบ: ใช้ค่าที่พบบ่อยที่สุดของแต่ละชนิด)
+function heightSectionSVG(levels) {
+  const rows = heightRows(levels), ceil = lvHeight(levels[0] || 0), H = 300, k = H / ceil, Y = v => 22 + H - v * k;
+  const top = cat => rows.filter(r => r.cat === cat).sort((a, b) => b.n - a.n)[0];
+  const marks = [[ceil, 'ฝ้าเพดาน', '#64748b'], [0, '±0.00 พื้นห้อง', '#0f172a']], shapes = [];
+  const w = top('win'), d = top('door');
+  if (w) { marks.push([w.e, 'ล่างหน้าต่าง', HL_C.win[2]], [w.top, 'บนหน้าต่าง', HL_C.win[2]]); shapes.push(`<rect x="62" y="${Y(w.top)}" width="58" height="${(w.top - w.e) * k}" fill="#dbeafe" stroke="${HL_C.win[2]}" stroke-width="1.5"/>`); }
+  if (d) { marks.push([d.top, 'ประตู', HL_C.door[2]]); shapes.push(`<rect x="134" y="${Y(d.top)}" width="52" height="${d.top * k}" fill="#f0fdf4" stroke="${HL_C.door[2]}" stroke-width="1.5"/>`); }
+  let sx = 66;
+  for (const cat of ['out', 'sw', 'ac', 'ht', 'db']) {
+    const seen = new Set();
+    for (const r of rows.filter(r => r.cat === cat).sort((a, b) => b.n - a.n)) {
+      const key = f2m(r.e); if (seen.has(key) || seen.size >= 2) continue; seen.add(key);
+      marks.push([r.e, HL_C[cat][4] || r.name.split(/[ /(]/)[0], HL_C[cat][2]]);
+      const s = cat === 'ac' ? `<rect x="64" y="${Y(r.e) - 14}" width="52" height="14" rx="4" fill="#ecfeff" stroke="${HL_C.ac[2]}" stroke-width="1.5"/>` : `<rect x="${sx}" y="${Y(r.e) - 8}" width="9" height="9" fill="#fff" stroke="${HL_C[cat][2]}" stroke-width="1.5"/>`;
+      shapes.push(s); if (cat !== 'ac') sx = sx > 100 ? 66 : sx + 14;
+    }
+  }
+  marks.sort((a, b) => b[0] - a[0]);
+  let last = -1e9; const ty = marks.map(m => { const y = Math.max(Y(m[0]) + 4, last + 13); last = y; return y; });
+  const ticks = marks.map((m, i) => `<line x1="196" y1="${Y(m[0])}" x2="226" y2="${Y(m[0])}" stroke="#94a3b8" stroke-dasharray="2 2"/><line x1="226" y1="${Y(m[0])}" x2="232" y2="${ty[i] - 4}" stroke="#cbd5e1"/><text x="236" y="${ty[i]}" fill="${m[2]}"${m[0] === 0 ? ' font-weight="700"' : ''}>${m[0] ? f2m(m[0]) + ' ' : ''}${esc(m[1])}</text>`).join('');
+  const hgt = Math.max(Y(0) + 14, last + 8);
+  return `<svg class="hlsec" width="360" height="${hgt}" viewBox="0 0 360 ${hgt}" font-family="'IBM Plex Sans Thai', Tahoma, sans-serif" font-size="11.5" style="flex:none">
+    <rect x="52" y="${Y(ceil)}" width="144" height="${H}" fill="#f8fafc" stroke="#334155" stroke-width="1.5"/>
+    <line x1="34" y1="${Y(0)}" x2="210" y2="${Y(0)}" stroke="#0f172a" stroke-width="3"/>${shapes.join('')}${ticks}</svg>`;
+}
+function showHeightTable() {
+  const levels = state.levels.map((_, i) => i);
+  openModal('📏 ตารางความสูงติดตั้ง', `<p class="psub" style="margin-top:0">วัดจากพื้นห้องที่ปูเสร็จแล้ว (±0.00) — ช่างไฟ ช่างประปา ช่างติดตั้งประตู-หน้าต่างใช้ได้เลย • แก้ความสูงที่ช่อง "ความสูงจากพื้น" ของแต่ละชิ้น แล้วตารางเปลี่ยนตาม</p>
+    <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start"><div style="flex:1;min-width:280px;overflow:auto">${heightTableHTML(levels)}</div>${heightSectionSVG(levels)}</div>`, [
+    { label: 'ปิด', fn: () => true },
+    { label: '🖨️ พิมพ์ / บันทึก PDF', cls: 'primary', fn: () => { printViaIframe(heightPrintHTML(levels)); return true; } },
+  ], { wide: true });
+}
+function heightPrintHTML(levels) {
+  const pj = state.project || {}, today = new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' });
+  return `<!doctype html><html lang="th"><head><meta charset="utf-8"><title>ตารางความสูงติดตั้ง</title>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@400;600;700&display=swap" rel="stylesheet">
+<style>@page{size:A4;margin:14mm}body{font-family:'IBM Plex Sans Thai',Tahoma,sans-serif;color:#1f2937;font-size:10.5pt}h1{font-size:17pt;margin:0}.sub{color:#64748b;margin:2mm 0 6mm}
+table{border-collapse:collapse;width:100%}th,td{border:.2mm solid #d1d5db;padding:1.6mm 2.4mm;text-align:left}th{background:#f5f1ea;font-size:9.5pt}.wrap{display:flex;gap:8mm;align-items:flex-start}.wrap>div{flex:1}
+.note{margin-top:6mm;font-size:9pt;color:#64748b}</style></head><body>
+<h1>📏 ตารางความสูงติดตั้ง — ${esc(pj.name || 'แบบบ้าน')}</h1><p class="sub">หน่วยเมตร วัดจากระดับพื้นห้องที่ปูเสร็จแล้ว (±0.00) · พิมพ์วันที่ ${today}</p>
+<div class="wrap"><div>${heightTableHTML(levels, '')}</div>${heightSectionSVG(levels)}</div>
+<p class="note">หน้าต่าง = ระดับขอบล่างถึงขอบบนของวงกบ · ประตู = ความสูงช่องประตู · ปลั๊ก/สวิตช์/แอร์/ตู้ = ระดับขอบล่างของของชิ้นนั้นจากพื้น · ตรวจสอบกับแบบก่อสร้างและหน้างานจริงอีกครั้งก่อนเจาะผนัง</p>
+</body></html>`;
+}
 // ทุกเฟรม: พื้นหลัง กลุ่มที่ซ่อน การแยกชั้น (มีภาพเคลื่อนไหว) และผนังที่ตัด
 function updateViewStyle() {
   const vs = vstyle();
@@ -2707,6 +2896,7 @@ function updateViewStyle() {
   // เส้นบอกขนาดแปลนขาว-ดำ: สร้างใหม่เมื่อแบบเปลี่ยน/เปลี่ยนชั้น
   const bw = vs === 'bw'; bwDimGroup.visible = bw;
   if (bw) { const key = curLevel + '|' + state.rooms.length + '|' + state.items.length; if (bwDimDirty || key !== bwDimKey) { bwDimKey = key; bwDimDirty = false; rebuildBwDims(); } }
+  updateHeightLabels(bw);
 }
 function applyViewStyle(vs) {
   viewDirty = false; cutSig = '';
@@ -2790,7 +2980,7 @@ function renderViewBar() {
   if (mode === 'walk' || (mode === 'orbit' && !dollOn)) { el.hidden = true; return; }
   el.hidden = false;
   const b = (k, label, on, title = '') => `<button class="vb${on ? ' on' : ''}" data-k="${k}" title="${title}">${label}</button>`;
-  const shot = b('poster', '🖼️ ภาพนำเสนอ', false, 'บันทึกภาพสวยพร้อมกรอบ ชื่อโครงการ และข้อมูลบ้าน (ไว้ส่งลูกค้า)') + b('shot', '📷 PNG', false, 'บันทึกภาพมุมนี้เป็นไฟล์ PNG ธรรมดา');
+  const shot = b('poster', '🖼️ ภาพนำเสนอ', false, 'บันทึกภาพสวยพร้อมกรอบ ชื่อโครงการ และข้อมูลบ้าน (ไว้ส่งลูกค้า)') + b('shot', '📷 PNG', false, 'บันทึกภาพมุมนี้เป็นไฟล์ PNG ธรรมดา') + b('glb', '📦 3D (.glb)', false, 'ส่งออกโมเดล 3D เปิดในมือถือ (AR) / SketchUp / Blender');
   const ao = b('ao', '✨ เงานุ่ม', aoOn, 'เงานุ่มตามมุมห้องและใต้เฟอร์นิเจอร์ ให้ภาพดูมีมิติ (ถ้าเครื่องช้า กดปิดได้)');
   if (vs === 'doll') {
     const sides = dollCut === 'auto' || dollCut === 'none' ? '' : dollCut;
@@ -2799,12 +2989,15 @@ function renderViewBar() {
       + `<span class="vsep"></span>${b('cs:low', 'เหลือ 1 ม.', dollCutStyle === 'low', 'ผนังด้านที่ตัดเหลือสูง 1 เมตร เห็นหน้าตัดผนัง')}${b('cs:hide', 'ยกออก', dollCutStyle === 'hide', 'เอาผนังด้านที่ตัดออกทั้งแผง')}`
       + `<span class="vsep"></span>${state.levels.length > 1 ? b('explode', dollExT ? '⇣ รวมชั้น' : '⇕ แยกชั้น', !!dollExT, 'ยกชั้นบนขึ้นให้เห็นทุกชั้นพร้อมกัน') : ''}${ao}${shot}`;
   } else {
-    el.innerHTML = `<span class="vl">แบบแปลน</span>${b('ps:normal', 'ปกติ', planStyle === 'normal', 'แปลนสำหรับแก้ไข (มีกริดและภาพรองแปลน)')}${b('ps:real', 'สมจริง', planStyle === 'real', 'มองจากด้านบนแบบภาพจริง เห็นพื้นและเฟอร์นิเจอร์')}${b('ps:bw', 'ขาว-ดำ', planStyle === 'bw', 'แปลนลายเส้นแบบสถาปนิก')}<span class="vsep"></span>${planStyle === 'real' ? ao : ''}${shot}`;
+    el.innerHTML = `<span class="vl">แบบแปลน</span>${b('ps:normal', 'ปกติ', planStyle === 'normal', 'แปลนสำหรับแก้ไข (มีกริดและภาพรองแปลน)')}${b('ps:real', 'สมจริง', planStyle === 'real', 'มองจากด้านบนแบบภาพจริง เห็นพื้นและเฟอร์นิเจอร์')}${b('ps:bw', 'ขาว-ดำ', planStyle === 'bw', 'แปลนลายเส้นแบบสถาปนิก')}<span class="vsep"></span>${planStyle === 'bw' ? b('hl', '📏 ความสูง', hlOn, 'ป้ายความสูงติดตั้ง: หน้าต่าง ประตู ปลั๊ก สวิตช์ แอร์ (สำหรับช่าง)') + (hlOn ? b('hlset', '⚙️', false, 'เลือกชนิดป้าย / ตารางความสูง') : '') + '<span class="vsep"></span>' : ''}${planStyle === 'real' ? ao : ''}${shot}`;
   }
 }
 function onViewBar(e) {
   const k = e.target.closest('.vb')?.dataset.k; if (!k) return;
   if (k === 'shot') { exportPNG(); return; }
+  if (k === 'glb') { showGlbDialog(); return; }
+  if (k === 'hl') { hlOn = !hlOn; saveHL(); document.getElementById('hlPop')?.setAttribute('hidden', ''); renderViewBar(); if (hlOn) toast('📏 ป้ายความสูงจากพื้นห้อง (เมตร) — กด ⚙️ เพื่อเลือกชนิดป้ายหรือดูตาราง • คลิกป้าย = เลือกของชิ้นนั้น', { ms: 4500 }); return; }
+  if (k === 'hlset') { toggleHLPop(e.target.closest('.vb')); return; }
   if (k === 'poster') { exportPoster(); return; }
   if (k === 'ao') { aoOn = !aoOn; try { localStorage.setItem('homeDesigner3D.ao', aoOn ? '1' : '0'); } catch (e) { } renderViewBar(); return; }
   if (k.startsWith('cs:')) { dollCutStyle = k.slice(3); renderViewBar(); return; }
@@ -3128,7 +3321,7 @@ function rebuildSite() {
   const og = new THREE.ShapeGeometry(big); og.rotateX(-Math.PI / 2);
   const fill = state.site.fill;
   const outside = new THREE.Mesh(og, outsideMat());
-  outside.position.y = GROUND_Y - fill - 0.02; outside.receiveShadow = true;
+  outside.position.y = GROUND_Y - fill - 0.02; outside.receiveShadow = true; outside.userData.exportSkip = true;
   // ถมดินทั้งที่ดิน: แสดงขอบดินถม/กำแพงกันดินรอบที่ดิน (ดินเดิมรอบ ๆ อยู่ต่ำกว่า)
   if (fill > 0.02) {
     const wallM = new THREE.MeshStandardMaterial({ color: '#b9a88f', roughness: 1 }), th = 0.15;
@@ -3144,7 +3337,7 @@ function rebuildSite() {
     const pts = [...lp, lp[0]].map(([x, z]) => new THREE.Vector3(x, GROUND_Y + 0.02, z));
     const line = new THREE.Line(new THREE.BufferGeometry().setFromPoints(pts), new THREE.LineDashedMaterial({ color: '#b91c1c', dashSize: 0.5, gapSize: 0.3 }));
     line.computeLineDistances(); siteGroup.add(line);
-    for (const p of pts.slice(0, -1)) { const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.4, 10), pinMat); pin.position.set(p.x, GROUND_Y + 0.2, p.z); siteGroup.add(pin); }
+    for (const p of pts.slice(0, -1)) { const pin = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.4, 10), pinMat); pin.position.set(p.x, GROUND_Y + 0.2, p.z); pin.userData.marker = true; siteGroup.add(pin); }
   }
   siteGroup.add(ground, outside);
   // ลูกศรทิศเหนือบนพื้นดิน (มุมหน้าซ้ายของที่ดิน)
@@ -3156,7 +3349,7 @@ function rebuildSite() {
   cx2.fillStyle = '#dc2626'; cx2.font = 'bold 48px sans-serif'; cx2.textAlign = 'center'; cx2.textBaseline = 'middle'; cx2.fillText('N', 32, 34);
   const spr = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(cv), depthTest: false })); spr.scale.set(0.8, 0.8, 1); spr.position.set(0, 0.5, 1.5);
   arrow.add(spr); arrow.rotation.y = ang;
-  arrow.position.set(S.x + 1.3, GROUND_Y + 0.03, S.z + S.d - 1.5);
+  arrow.position.set(S.x + 1.3, GROUND_Y + 0.03, S.z + S.d - 1.5); arrow.userData.marker = true;
   siteGroup.add(arrow);
 }
 
@@ -6288,6 +6481,7 @@ const BUILDERS = {
   sideboard: buildSideboard, curtain: buildCurtain, wall_art: buildWallArt, upper_cabinet: buildUpperCabinet, range_hood: buildRangeHood, microwave: buildMicrowave,
   bar_stool: buildBarStool, bar_counter: buildBarCounter, bathtub: buildBathtub, washer: buildWasher, mirror: buildMirror, altar: buildAltar,
   shrine_shelf: buildShrineShelf, shoe_cabinet: buildShoeCabinet,
+  septic_tank: buildSeptic, manhole: buildPitLid, grease_trap: buildPitLid,
   scooter: buildScooter, bigbike: buildBigBike, kid_bike: buildKidBike, stroller: buildStroller, wheelchair: buildWheelchair,
   water_dispenser: buildWaterDispenser, tank_pump: buildTankPump, drying_rack: buildDryingRack, washer_top: buildWasherTop, food_cabinet: buildFoodCabinet,
 };
@@ -6758,6 +6952,7 @@ function floorPoint(cx, cy) { setRay(cx, cy); groundPlane.constant = -lvBase(cur
 // เลือกได้เฉพาะของในชั้นที่กำลังแก้ไข
 function pickItem(cx, cy) {
   setRay(cx, cy);
+  const hl = pickHeightLabel(); if (hl) return hl; // คลิกป้ายความสูง = เลือกของชิ้นนั้น
   for (const h of raycaster.intersectObjects(LV[curLevel]?.items.children || [], true)) {
     if (!h.object.isMesh) continue;
     let o = h.object; while (o && o.userData.itemId === undefined) o = o.parent;
@@ -7535,7 +7730,7 @@ function uiV2Init() {
   // เมนูไฟล์
   const fileBtn = document.createElement('button'); fileBtn.className = 'tbtn'; fileBtn.id = 'b_filemenu'; fileBtn.title = 'ไฟล์: ใหม่ เปิด บันทึก ตัวอย่าง ภาพ PNG รายการ'; fileBtn.innerHTML = '<span class="ic">📁</span>ไฟล์ ▾';
   const pop = document.createElement('div'); pop.className = 'filepop'; pop.id = 'filePop'; pop.hidden = true;
-  ['b_new', 'b_sample', 'b_gen', 'b_say', 'b_sketch', 'b_open', 'b_save', 'b_mytpl', 'b_png', 'b_list'].forEach(id => pop.appendChild(byId(id)));
+  ['b_new', 'b_sample', 'b_gen', 'b_say', 'b_sketch', 'b_open', 'b_save', 'b_mytpl', 'b_png', 'b_glb', 'b_list'].forEach(id => pop.appendChild(byId(id)));
   fileBtn.onclick = e => { e.stopPropagation(); pop.hidden = !pop.hidden; };
   document.addEventListener('click', e => { if (!pop.hidden && !pop.contains(e.target) && e.target !== fileBtn) pop.hidden = true; });
   pop.addEventListener('click', e => { if (e.target.closest('.tbtn')) pop.hidden = true; });
@@ -7717,6 +7912,9 @@ function renderItemProps(body, it) {
       <input type="range" class="range" id="p_elevr" min="0" max="${cm(maxElev(it))}" step="1" value="${cm(it.elev)}" aria-label="ปรับความสูงจากพื้น">
       <div class="presets">${ELEV_PRESETS.map(([v, t]) => `<button class="pchip" data-v="${v}" title="${t}">${v === 0 ? '⬇ วางบนพื้น' : `${t} ${v}`}</button>`).join('')}</div>
     </div>`}
+    ${isElec(it) && !['switch', 'db'].includes(c.mep) ? `<div class="sec">⚡ วงจรไฟฟ้า</div>
+    <div class="field"><label for="p_circ">ชื่อกลุ่มวงจร (เว้นว่าง = จัดให้อัตโนมัติ)</label><input class="inp" id="p_circ" maxlength="30" list="p_circs" value="${esc(it.circuit || '')}" placeholder="${esc(autoCircLabel(it))}"><datalist id="p_circs">${[...new Set(state.items.map(i => i.circuit).filter(Boolean))].map(v => `<option value="${esc(v)}">`).join('')}</datalist></div>
+    <div class="psub">ของที่ตั้งชื่อกลุ่มเดียวกันจะอยู่วงจรเดียวกันในแบบไฟฟ้า (🖨️ พิมพ์แบบ → แบบไฟฟ้า)</div>` : ''}
     <div class="sec">🎨 สี</div>
     <div class="swatches">${PALETTE.map(p => `<button class="sw${p === it.color ? ' cur' : ''}" data-c="${p}" style="background:${p}" title="${p}"></button>`).join('')}
       <input type="color" id="p_color" value="${it.color}" title="เลือกสีเอง"></div>
@@ -7748,6 +7946,7 @@ function renderItemProps(body, it) {
   // ความสูงจากพื้น: เห็นผลทันทีขณะพิมพ์หรือเลื่อนแถบ บันทึกประวัติเมื่อปล่อย
   on('p_elev', 'input', () => setElev(it, numVal('p_elev'), 'p_elev'));
   on('p_elev', 'change', () => { setElev(it, numVal('p_elev'), null, true); commit(); });
+  on('p_circ', 'change', e => { const v = e.target.value.trim().slice(0, 30); if (v) it.circuit = v; else delete it.circuit; commit(); toast(v ? `อยู่ในวงจร "${v}" แล้ว` : 'กลับไปจัดวงจรอัตโนมัติ', { ms: 2000 }); });
   on('p_elevr', 'input', () => setElev(it, numVal('p_elevr'), 'p_elevr'));
   on('p_elevr', 'change', commit);
   body.querySelectorAll('.pchip').forEach(b => b.addEventListener('click', () => { setElev(it, +b.dataset.v, null, true); commit(); }));
@@ -8930,12 +9129,13 @@ function roomListHTML(L) {
     <div class="btnrow"><button class="btn primary" id="h_addroom">＋ เพิ่มห้อง</button><button class="btn${tool?.kind === 'drawRoom' ? ' on' : ''}" id="h_drawroom">✏️ วาดห้อง</button></div>
     <div class="btnrow" style="margin-top:6px"><button class="btn${tool?.kind === 'drawWall' ? ' on' : ''}" id="h_drawwall" title="คลิกจุดเริ่ม แล้วคลิกจุดจบ วาดต่อเนื่องได้หลายช่วง • มุมยึดทีละ 15° (Shift = อิสระ)">📐 วาดผนัง (เฉียงได้)</button></div>
     <button class="btn wide" id="h_autolayout">🪄 จัดผังห้องอัตโนมัติ</button>
-    <button class="btn wide" id="h_automep">⚡ วางจุดไฟฟ้า-ประปาอัตโนมัติ</button>`;
+    <button class="btn wide" id="h_automep">⚡ วางจุดไฟฟ้า-ประปาอัตโนมัติ</button>${L === 0 ? '<button class="btn wide" id="h_autoplumb" title="ถังบำบัด บ่อพัก บ่อดักไขมัน ถังน้ำ+ปั๊ม นอกบ้าน ด้านที่ท่อออก">🚽 วางถังบำบัด บ่อพัก ถังน้ำ อัตโนมัติ</button>' : ''}`;
 }
 function bindRoomList(body) {
   body.querySelectorAll('.roomitem').forEach(b => b.addEventListener('click', () => select({ kind: 'room', id: b.dataset.id })));
   on('h_automep', 'click', () => { if (!roomsOf(curLevel).length) { toast('ยังไม่มีห้องในชั้นนี้', { type: 'warn' }); return; } autoMEP(curLevel); });
   on('h_autolayout', 'click', showAutoLayoutDialog);
+  on('h_autoplumb', 'click', autoPlumb);
   on('h_addroom', 'click', addRoom);
   on('h_drawroom', 'click', () => (tool?.kind === 'drawRoom' ? cancelTool() : startDrawRoom()));
   on('h_drawwall', 'click', startDrawWall);
@@ -9539,6 +9739,101 @@ function renderSnapshot(opt = {}) {
   if (selBox) selBox.visible = true;
   return c;
 }
+/* ---------- ส่งออกโมเดล 3D (.glb) — เปิดในมือถือ (AR) / Windows 3D Viewer / SketchUp / Blender ----------
+   คัดลอกฉากในสภาพปกติ (ไม่ใช่แปลนขาว-ดำ/ผนังที่ตัด) ตัดเส้นช่วย ป้าย และพื้นนอกเขตที่ดินออก แล้วส่งออกด้วย GLTFExporter */
+let glbPrefs = { scope: 'all', roof: true, furn: true, outdoor: true, others: true, markers: false, names: true, tex: 1024 };
+try { Object.assign(glbPrefs, JSON.parse(localStorage.getItem('homeDesigner3D.glb') || '{}')); } catch (e) { }
+function showGlbDialog() {
+  const P = glbPrefs, seg = (name, opts) => `<div class="seg3" data-name="${name}">${opts.map(([v, t]) => `<button type="button" class="${String(P[name]) === String(v) ? 'on' : ''}" data-v="${v}">${t}</button>`).join('')}</div>`;
+  const ck = (k, t) => `<label class="chk"><input type="checkbox" id="glb_${k}" ${P[k] ? 'checked' : ''}> ${t}</label>`;
+  openModal('📦 ส่งออกโมเดล 3D (.glb)', `
+    <p style="margin-top:0">ไฟล์ <b>.glb</b> คือไฟล์ 3D มาตรฐาน — ส่งทาง LINE ให้ลูกค้าเปิดดูในมือถือ (Android วางบ้านย่อส่วนบนโต๊ะแบบ AR ได้) หรือเปิดใน Windows 3D Viewer • SketchUp • Blender • 3ds Max</p>
+    <div class="field"><label>ส่งออกส่วนไหน</label>${seg('scope', [['all', 'ทั้งบ้าน + ที่ดิน'], ['house', 'เฉพาะตัวบ้าน'], ['level', 'เฉพาะ' + esc(lvName(curLevel))]])}</div>
+    <div class="field"><label>รวมอะไรบ้าง</label><div class="glbck">${ck('roof', 'หลังคา (+ โซลาร์เซลล์)')}${ck('furn', 'เฟอร์นิเจอร์ + ของในบ้าน')}${ck('outdoor', 'ต้นไม้ + ของนอกบ้าน')}${ck('others', 'บ้านหลังอื่นในที่ดิน')}${ck('markers', 'หมุดที่ดิน + ลูกศรทิศเหนือ')}${ck('names', 'ตั้งชื่อชิ้นงานเป็นภาษาไทย')}</div></div>
+    <div class="field"><label>ความละเอียดลายพื้นผิว</label>${seg('tex', [[512, 'เล็ก (ส่ง LINE)'], [1024, 'ปกติ'], [2048, 'สูง (งานพรีเซนต์)']])}</div>
+    <p class="psub">ไฟล์ .glb มีรูปทรง สี และลายพื้นผิว (ไม่มีแสงกลางคืน/เงานุ่ม/ปลาว่ายน้ำ) และเปิดกลับมาแก้ในแอปนี้ไม่ได้ — ใช้ 💾 บันทึก (.json) สำหรับแก้ไขต่อ</p>`, [
+    { label: 'ยกเลิก', fn: () => true },
+    { label: '⬇️ ดาวน์โหลด .glb', cls: 'primary', fn: () => { readGlbForm(); exportGLB(); return true; } },
+  ]);
+  document.querySelectorAll('#mBody .seg3').forEach(s => s.addEventListener('click', e => { const b = e.target.closest('button'); if (b) s.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); }));
+}
+function readGlbForm() {
+  const sv = n => document.querySelector(`#mBody .seg3[data-name="${n}"] .on`)?.dataset.v;
+  glbPrefs.scope = sv('scope') || 'all'; glbPrefs.tex = +(sv('tex') || 1024);
+  for (const k of ['roof', 'furn', 'outdoor', 'others', 'markers', 'names']) glbPrefs[k] = !!$('#glb_' + k)?.checked;
+  try { localStorage.setItem('homeDesigner3D.glb', JSON.stringify(glbPrefs)); } catch (e) { }
+}
+// คัดลอกฉากสำหรับส่งออก (ใช้ geometry/วัสดุเดิมร่วมกัน ไม่แตะฉากจริง) • InstancedMesh → รวมเป็น mesh ธรรมดา (เปิดได้ทุกโปรแกรม)
+function buildGlbScene(opt, BGU) {
+  applyViewStyle('normal'); updateDollCut(false); // วัสดุ/ผนังกลับเป็นปกติก่อนคัดลอก (เฟรมถัดไปกลับเป็นมุมมองเดิมเอง)
+  const tmp = [], itemOf = new Map(state.items.map(it => [it.id, it])), names = new Map(), stat = { meshes: 0 };
+  const keepItem = it => !it || isWallMount(it) || (outsideHouse(it) ? opt.outdoor && opt.scope === 'all' : opt.furn);
+  const copy = (src, force) => {
+    const u = src.userData;
+    if ((!force && !src.visible) || u.bwEdgeLine || u.isHelper || u.exportSkip || (u.marker && !opt.markers)) return null;
+    if (u.itemId !== undefined && !keepItem(itemOf.get(u.itemId))) return null;
+    let o;
+    if (src.isInstancedMesh) {
+      const n = src.count, vc = src.geometry.attributes.position.count; if (!n || n * vc > 600000) return null;
+      const m4 = new THREE.Matrix4(), col = new THREE.Color(), geos = [];
+      for (let i = 0; i < n; i++) {
+        src.getMatrixAt(i, m4); const g = src.geometry.clone().applyMatrix4(m4);
+        if (src.instanceColor) { src.getColorAt(i, col); const a = new Float32Array(vc * 3); for (let j = 0; j < vc; j++) a.set([col.r, col.g, col.b], j * 3); g.setAttribute('color', new THREE.BufferAttribute(a, 3)); }
+        geos.push(g);
+      }
+      const merged = BGU.mergeGeometries(geos); geos.forEach(g => g.dispose()); if (!merged) return null;
+      let mat = src.material; if (src.instanceColor) { mat = src.material.clone(); mat.vertexColors = true; tmp.push(mat); }
+      tmp.push(merged); o = new THREE.Mesh(merged, mat); stat.meshes++;
+    } else if (src.isMesh) { o = new THREE.Mesh(src.geometry, src.material); stat.meshes++; }
+    else if (src.isSprite || src.isLine || src.isPoints || src.isLight || src.isCamera) return null;
+    else o = new THREE.Group();
+    if (src.matrixAutoUpdate) { o.position.copy(src.position); o.quaternion.copy(src.quaternion); o.scale.copy(src.scale); }
+    else src.matrix.decompose(o.position, o.quaternion, o.scale);
+    o.name = src.name;
+    if (opt.names) { if (names.has(src)) o.name = names.get(src); else if (u.itemId !== undefined) { const it = itemOf.get(u.itemId); if (it) o.name = it.name || CATALOG[it.type].name; } }
+    for (const c of src.children) { const k = copy(c); if (k) o.add(k); }
+    return o.isMesh || o.children.length ? o : null;
+  };
+  const N = (th, en) => (opt.names ? th : en);
+  const root = new THREE.Group(); root.name = N(state.project?.name || 'บ้าน', 'house');
+  const levels = opt.scope === 'level' ? [curLevel] : state.levels.map((_, i) => i);
+  for (const L of levels) {
+    const G = LV[L]; if (!G) continue;
+    names.set(G.floor, 'พื้น'); names.set(G.walls, 'ผนัง'); names.set(G.items, 'ประตู หน้าต่าง และของ');
+    const c = copy(G.root, true); if (!c) continue;
+    c.name = N(lvName(L), `level${L + 1}`); if (opt.scope === 'level') c.position.y = 0;
+    root.add(c);
+  }
+  if (opt.scope !== 'level' && opt.roof) for (const [g, th] of [[roofGroup, 'หลังคา'], [solarGroup, 'โซลาร์เซลล์']]) { const c = copy(g, true); if (c) { c.name = N(th, g === roofGroup ? 'roof' : 'solar'); root.add(c); } }
+  if (opt.scope === 'all') {
+    const s = copy(siteGroup, true); if (s) { s.name = N('ที่ดิน + สวน', 'site'); root.add(s); }
+    if (opt.others && (state.others || []).length) {
+      for (const sn of houseSnaps.values()) sn.roof.visible = opt.roof;
+      const o = copy(othersGroup, true); if (o) { o.name = N('บ้านหลังอื่น', 'other houses'); root.add(o); }
+    }
+  }
+  viewDirty = true; cutSig = ''; updateLevelVisibility();
+  return { root, tmp, meshes: stat.meshes };
+}
+let _glbMod = null, _glbBusy = false;
+async function exportGLB(opt = glbPrefs) {
+  if (_glbBusy) return; _glbBusy = true;
+  toast('📦 กำลังสร้างไฟล์โมเดล 3D…', { ms: 4000 });
+  try {
+    await new Promise(r => setTimeout(r, 60)); // ให้ข้อความขึ้นก่อนเริ่มงานหนัก
+    try { _glbMod ||= await Promise.all([import('three/addons/exporters/GLTFExporter.js'), import('three/addons/utils/BufferGeometryUtils.js')]); }
+    catch (e) { toast('โหลดตัวส่งออก 3D ไม่ได้ — ต้องต่ออินเทอร์เน็ต (ครั้งแรก) แล้วลองใหม่', { type: 'warn', ms: 5000 }); return; }
+    const [{ GLTFExporter }, BGU] = _glbMod, { root, tmp, meshes } = buildGlbScene(opt, BGU);
+    if (!meshes) { toast('ไม่มีอะไรให้ส่งออก — ลองติ๊กตัวเลือกเพิ่ม', { type: 'warn' }); return; }
+    const buf = await new GLTFExporter().parseAsync(root, { binary: true, maxTextureSize: opt.tex, onlyVisible: true });
+    tmp.forEach(x => x.dispose());
+    const name = (state.project?.name || 'แบบบ้าน').replace(/[\\/:*?"<>|]/g, '');
+    download(new Blob([buf], { type: 'model/gltf-binary' }), `${name}-3D-${stamp()}.glb`);
+    toast(`📦 บันทึกโมเดล 3D แล้ว — ${(buf.byteLength / 1e6).toFixed(1)} MB · ${meshes} ชิ้นส่วน${buf.byteLength > 20e6 ? ' (ไฟล์ใหญ่ ถ้าจะส่ง LINE เลือกความละเอียด "เล็ก")' : ''}`, { type: 'ok', ms: 6000 });
+  } catch (e) {
+    console.error(e); toast('ส่งออกโมเดล 3D ไม่สำเร็จ: ' + (e.message || e), { type: 'warn', ms: 6000 });
+  } finally { _glbBusy = false; viewDirty = true; cutSig = ''; }
+}
 function exportPNG() {
   renderSnapshot().toBlob(b => { download(b, `แบบบ้าน-${stamp()}.png`); toast('🖼️ บันทึกภาพ PNG แล้ว', { type: 'ok' }); }, 'image/png');
 }
@@ -9591,8 +9886,8 @@ const SCALES = [20, 25, 50, 75, 100, 125, 150, 200, 250, 300, 400, 500];
 const OPEN_TAG = { door: 'D', window: 'W', garage: 'G', opening: 'O' };
 const SIDE_NAME = { s: 'รูปด้านหน้า', n: 'รูปด้านหลัง', w: 'รูปด้านซ้าย', e: 'รูปด้านขวา' };
 const PLAN_FIXTURES = new Set(['toilet', 'basin', 'shower', 'counter', 'fridge', 'stairs']); // ของที่ช่างต้องรู้ตำแหน่ง (ท่อน้ำ)
-const printPrefs = { paper: 'A3', scale: '', site: true, plan: true, furn: true, mep: true, elev: true, sched: true, list: true, boq: true };
-const PRINT_SHEETS = ['site', 'plan', 'furn', 'mep', 'elev', 'sched', 'list', 'boq'];
+const printPrefs = { paper: 'A3', scale: '', site: true, plan: true, furn: true, elec: true, plumb: true, elev: true, sched: true, list: true, boq: true };
+const PRINT_SHEETS = ['site', 'plan', 'furn', 'elec', 'plumb', 'elev', 'sched', 'list', 'boq'];
 const f2 = v => (Math.round(v * 100) / 100).toFixed(2);
 const nn = v => Math.round(v * 100) / 100;
 const uniqSorted = vals => [...new Set(vals.map(v => Math.round(v * 1000) / 1000))].sort((a, b) => a - b);
@@ -9637,6 +9932,330 @@ function northArrowSVG(pen, x, y) {
   pen.circle(x, y, 6, { fill: '#fff', sw: 0.25 });
   pen.raw(`<g transform="translate(${nn(x)} ${nn(y)}) rotate(${nn(a)})"><polygon points="0,-5.2 2.4,3 0,1.6 -2.4,3" fill="#000"/></g>`);
   pen.text(x + nx * 9, y + nz * 9 + 1.2, 'N', 3.2, { weight: 700 });
+}
+/* =========================================================
+   แบบไฟฟ้า / แบบประปา-สุขาภิบาล (แยกแผ่น)
+   ไฟฟ้า: จับคู่สวิตช์→ดวงไฟ จัดวงจรอัตโนมัติ (ตั้งชื่อกลุ่มวงจรเองได้) ตารางโหลด ขนาดมิเตอร์ ตรวจจุดที่ขาด
+   ประปา: แนวท่อน้ำดี/น้ำร้อน/น้ำทิ้ง/น้ำโสโครก แบบแผนผัง ถังบำบัด บ่อพัก บ่อดักไขมัน ถังน้ำ ขนาดท่อ ตารางสุขภัณฑ์
+   ค่าทั้งหมดเป็นค่าประมาณเพื่อคุยกับช่าง — บนแบบระบุให้ช่าง/วิศวกรตรวจยืนยัน
+   ========================================================= */
+const ELEC_M = new Set(['outlet', 'switch', 'light', 'fan', 'ac', 'heater', 'db', 'wifi']);
+const isElec = it => ELEC_M.has(CATALOG[it.type]?.mep);
+const CIRC_COL = ['#d97706', '#ca8a04', '#dc2626', '#e11d48', '#9333ea', '#2563eb', '#0891b2', '#059669', '#b91c1c', '#7c3aed', '#db2777', '#0d9488', '#65a30d', '#ea580c'];
+// ห้องของจุด (ของติดผนัง: ดูฝั่งหน้าของ จะได้ไม่ตกไปห้องข้าง ๆ)
+function autoCircLabel(it) { const P = elecPlan(), id = P.byItem.get(it.id), c = P.circuits.find(x => x.id === id); return c ? `อัตโนมัติ: ${c.id} ${c.name}` : 'อัตโนมัติ'; }
+function mepRoom(it) {
+  const L = itemLevel(it), [x, z] = CATALOG[it.type].onWall ? toWorld(it, 0, 0.2) : [it.x, it.z];
+  return roomAt(x, z, L) || roomAt(it.x, it.z, L);
+}
+const brSpec = A => A <= 10 ? ['10A', '1.5'] : A <= 16 ? ['16A', '2.5'] : A <= 20 ? ['20A', '4'] : A <= 25 ? ['25A', '4'] : ['32A', '6'];
+function elecPlan() {
+  const items = state.items.filter(isElec), mp = it => CATALOG[it.type].mep, multi = state.levels.length > 1;
+  const info = new Map(items.map(it => { const r = mepRoom(it); return [it.id, { r, rt: r ? roomType(r) : 'other', L: itemLevel(it) }]; }));
+  const groups = new Map();
+  const add = (key, kind, name, it) => { let g = groups.get(key); if (!g) groups.set(key, g = { kind, name, items: [] }); g.items.push(it); };
+  for (const it of items) {
+    const t = mp(it), I = info.get(it.id), lv = multi ? ` (${lvName(I.L)})` : '', priv = I.rt === 'bed' || I.rt === 'bath', zone = priv ? 'p' : 'c', rn = I.r?.name || 'นอกห้อง';
+    if (t === 'switch' || t === 'db') continue;
+    if (it.circuit) add('u|' + it.circuit, 'user', it.circuit, it);
+    else if (t === 'ac') add('ac|' + it.id, 'ac', `แอร์ ${rn}`, it);
+    else if (t === 'heater') add('wh|' + it.id, 'wh', `เครื่องทำน้ำอุ่น ${rn}`, it);
+    else if (t === 'outlet' && I.rt === 'kitchen') add('k|' + I.L, 'kout', 'ปลั๊กครัว' + lv, it);
+    else if (t === 'outlet') add(`o|${I.L}|${zone}`, 'out', (priv ? 'ปลั๊กห้องนอน + ห้องน้ำ' : 'ปลั๊กส่วนกลาง') + lv, it);
+    else add(`l|${I.L}|${zone}`, 'light', (priv ? 'ไฟห้องนอน + ห้องน้ำ' : 'ไฟส่วนกลาง') + lv, it);
+  }
+  const MAXP = { light: 10, out: 8, kout: 6 }, ORDER = ['light', 'out', 'kout', 'user', 'ac', 'wh'], list = [];
+  for (const g of [...groups.values()].sort((a, b) => ORDER.indexOf(a.kind) - ORDER.indexOf(b.kind))) {
+    const mx = MAXP[g.kind]; if (!mx || g.items.length <= mx) { list.push(g); continue; }
+    const its = [...g.items].sort((a, b) => a.z - b.z || a.x - b.x), n = Math.ceil(its.length / mx);
+    for (let i = 0; i < n; i++) list.push({ ...g, name: `${g.name} (${i + 1})`, items: its.slice(i * mx, (i + 1) * mx) });
+  }
+  const VA = it => ({ light: 100, fan: 100, wifi: 20, outlet: 180, ac: it.w >= 0.98 ? 1900 : 1300, heater: 4500 }[mp(it)] || 100);
+  const byItem = new Map(), circuits = list.map((g, i) => {
+    const id = 'C' + (i + 1), bathOut = g.items.some(it => mp(it) === 'outlet' && info.get(it.id).rt === 'bath');
+    let va = g.items.reduce((a, it) => a + VA(it), 0), br, wire, rcbo = bathOut;
+    if (g.kind === 'light') [br, wire] = ['10A', '1.5'];
+    else if (g.kind === 'out') [br, wire] = ['16A', '2.5'];
+    else if (g.kind === 'kout') { va = Math.max(va, 2000); [br, wire] = ['20A', '4']; }
+    else if (g.kind === 'ac') [br, wire] = va > 1500 ? ['25A', '4'] : ['20A', '4'];
+    else if (g.kind === 'wh') { [br, wire] = ['32A', '6']; rcbo = true; }
+    else [br, wire] = brSpec(va / 220 * 1.25);
+    g.items.forEach(it => byItem.set(it.id, id));
+    return { id, kind: g.kind, name: g.name, items: g.items, n: g.items.length, va, br: br + (rcbo ? ' RCBO' : ''), wire, col: CIRC_COL[i % CIRC_COL.length] };
+  });
+  // สวิตช์ → ดวงไฟ: ดวงไฟแต่ละดวงคุมด้วยสวิตช์ที่ใกล้ที่สุดในห้องเดียวกัน
+  const pairs = [], noSwitch = new Set();
+  for (const it of items.filter(i => ['light', 'fan'].includes(mp(i)))) {
+    const I = info.get(it.id); if (!I.r) continue;
+    const r = I.r, onR = s => s.x >= r.x - 0.35 && s.x <= r.x + r.w + 0.35 && s.z >= r.z - 0.35 && s.z <= r.z + r.d + 0.35 && itemLevel(s) === I.L; // สวิตช์ในห้อง หรือบนผนังรอบห้อง (เช่น นอกประตูห้องน้ำ)
+    let sws = items.filter(s => mp(s) === 'switch' && info.get(s.id).r === r); if (!sws.length) sws = items.filter(s => mp(s) === 'switch' && onR(s));
+    if (!sws.length) { noSwitch.add(I.r); continue; }
+    const s = sws.reduce((a, b) => (Math.hypot(a.x - it.x, a.z - it.z) <= Math.hypot(b.x - it.x, b.z - it.z) ? a : b));
+    pairs.push([s, it]);
+  }
+  const db = items.find(i => mp(i) === 'db') || null;
+  const va = circuits.reduce((a, c) => a + c.va, 0), demand = va * 0.6, amps = demand / 220;
+  const meter = amps <= 12 ? '5(15)A' : amps <= 36 ? '15(45)A' : amps <= 80 ? '30(100)A' : '50(150)A หรือไฟ 3 เฟส';
+  const main = [32, 40, 50, 63, 80, 100, 125].find(b => b >= amps * 1.25) || 125;
+  const mainWire = { 32: '10', 40: '10', 50: '16', 63: '16', 80: '25', 100: '35', 125: '50' }[main];
+  const ways = [6, 8, 10, 12, 14, 18, 24, 36].find(w => w >= circuits.length + 2) || 36;
+  // ตรวจจุดที่ขาด
+  const checks = [], cntIn = (r, m) => items.filter(i => mp(i) === m && info.get(i.id).r === r).length;
+  if (!items.length) checks.push([false, 'ยังไม่ได้วางจุดไฟฟ้า — กด "⚡ วางจุดไฟฟ้า-ประปาอัตโนมัติ" ในแผงห้อง']);
+  else {
+    let bedOk = true;
+    for (const r of state.rooms) {
+      const rt = roomType(r), o = cntIn(r, 'outlet'), nm = (multi ? lvName(r.level || 0) + ' · ' : '') + r.name;
+      if (rt === 'bed' && o === 0) { bedOk = false; checks.push([false, `${nm} ยังไม่มีปลั๊ก — แนะนำอย่างน้อย 2 จุด (ข้างเตียง + โต๊ะ)`]); }
+      if ((rt === 'living' || rt === 'kitchen') && o < 2) checks.push([false, `${nm} มีปลั๊ก ${o} จุด — แนะนำอย่างน้อย 2–3 จุด`]);
+      if (r.w * r.d >= 2 && !cntIn(r, 'light') && !cntIn(r, 'fan')) checks.push([false, `${nm} ยังไม่มีดวงไฟ`]);
+    }
+    for (const r of noSwitch) checks.push([false, `${r.name}: ดวงไฟยังไม่มีสวิตช์ในห้อง — วางสวิตช์ข้างประตู (สูง 1.20)`]);
+    if (bedOk && state.rooms.some(r => roomType(r) === 'bed')) checks.push([true, 'ห้องนอนทุกห้องมีปลั๊ก']);
+    if (!noSwitch.size && pairs.length) checks.push([true, 'ดวงไฟทุกดวงมีสวิตช์คุมในห้องเดียวกัน']);
+    if (circuits.some(c => c.kind === 'ac' || c.kind === 'wh')) checks.push([true, 'แอร์และเครื่องทำน้ำอุ่นแยกวงจรเฉพาะทุกเครื่อง']);
+    if (circuits.some(c => c.br.includes('RCBO') && c.kind !== 'wh')) checks.push([true, 'ปลั๊กในห้องน้ำอยู่ในวงจรที่ใช้เบรกเกอร์กันดูด (RCBO)']);
+    const nAc = items.filter(i => mp(i) === 'ac').length, nCdu = state.items.filter(i => CATALOG[i.type].mep === 'acout').length;
+    if (nAc > nCdu) checks.push([false, `มีแอร์ ${nAc} เครื่อง แต่คอยล์ร้อน ${nCdu} ตัว — วางคอยล์ร้อนนอกบ้านใกล้ห้องที่มีแอร์`]);
+    if (!db) checks.push([false, 'ยังไม่มีตู้ไฟในแบบ — แนะนำติดใกล้ประตูหน้าบ้าน สูง 1.50 ม.']);
+  }
+  return { items, info, circuits, byItem, pairs, db, va, demand, amps, meter, main, mainWire, ways, checks };
+}
+// เส้นโค้งบนกระดาษ (หน่วย มม.)
+const qCurve = (ax, ay, bx, by, bend, col, w, dash = '') => { const mx = (ax + bx) / 2 - (by - ay) * bend, my = (ay + by) / 2 + (bx - ax) * bend; return `<path d="M${nn(ax)} ${nn(ay)} Q${nn(mx)} ${nn(my)} ${nn(bx)} ${nn(by)}" fill="none" stroke="${col}" stroke-width="${w}"${dash ? ` stroke-dasharray="${dash}"` : ''}/>`; };
+function arrowSVG(x, y, ang, len, col, label, fs = 2.4) {
+  const ex = x + Math.cos(ang) * len, ey = y + Math.sin(ang) * len, h = 1.4, a1 = ang + 2.6, a2 = ang - 2.6;
+  return `<line x1="${nn(x)}" y1="${nn(y)}" x2="${nn(ex)}" y2="${nn(ey)}" stroke="${col}" stroke-width="0.35"/><path d="M${nn(ex)} ${nn(ey)} L${nn(ex + Math.cos(a1) * h)} ${nn(ey + Math.sin(a1) * h)} L${nn(ex + Math.cos(a2) * h)} ${nn(ey + Math.sin(a2) * h)}Z" fill="${col}"/>`
+    + (label ? `<text x="${nn(ex + Math.cos(ang) * 2.8)}" y="${nn(ey + Math.sin(ang) * 2.8 + fs * 0.36)}" font-size="${fs}" font-weight="700" fill="${col}" text-anchor="middle" stroke="#fff" stroke-width="${fs * 0.3}" paint-order="stroke">${label}</text>` : '');
+}
+function drawElecOverlay(pen, L, X, Y) {
+  const P = elecPlan(), out = [], onL = it => itemLevel(it) === L, mp = it => CATALOG[it.type].mep;
+  const db = P.db && onL(P.db) ? P.db : null, dbP = db ? [X(db.x), Y(db.z)] : null;
+  // สวิตช์ → ดวงไฟ (เส้นประ)
+  for (const [s, l] of P.pairs) if (onL(s)) { const c = P.circuits.find(c => c.id === P.byItem.get(l.id)); out.push(qCurve(X(s.x), Y(s.z), X(l.x), Y(l.z), 0.28, c?.col || '#555', 0.22, '1.2 0.8')); }
+  // สายในวงจรเดียวกัน (ต่อจากจุดใกล้ตู้ไฟไปจุดถัดไปที่ใกล้ที่สุด) + ลูกศรกลับตู้ไฟ
+  for (const c of P.circuits) {
+    const its = c.items.filter(onL); if (!its.length) continue;
+    const ref = dbP || [X(its[0].x), Y(its[0].z)], d = it => Math.hypot(X(it.x) - ref[0], Y(it.z) - ref[1]);
+    const left = [...its].sort((a, b) => d(a) - d(b)), chain = [left.shift()];
+    while (left.length) { const p = chain[chain.length - 1]; left.sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z)); chain.push(left.shift()); }
+    for (let i = 0; i < chain.length - 1; i++) out.push(qCurve(X(chain[i].x), Y(chain[i].z), X(chain[i + 1].x), Y(chain[i + 1].z), 0.14, c.col, 0.3));
+    const s = chain[0], sx = X(s.x), sy = Y(s.z), ang = dbP && Math.hypot(dbP[0] - sx, dbP[1] - sy) > 3 ? Math.atan2(dbP[1] - sy, dbP[0] - sx) : Math.PI * 0.75;
+    out.push(arrowSVG(sx, sy, ang, 5.5, c.col, c.id));
+  }
+  if (dbP) out.push(`<circle cx="${nn(dbP[0])}" cy="${nn(dbP[1])}" r="3.6" fill="none" stroke="#0f172a" stroke-width="0.35" stroke-dasharray="1 0.6"/><text x="${nn(dbP[0])}" y="${nn(dbP[1] - 4.6)}" font-size="2.2" font-weight="700" text-anchor="middle" stroke="#fff" stroke-width="0.7" paint-order="stroke">DB ตู้ไฟ ${P.ways} ช่อง</text>`);
+  // จำนวนจุดต่อห้อง (มุมล่างซ้ายของห้อง)
+  for (const r of roomsOf(L)) {
+    const n = m => P.items.filter(i => mp(i) === m && P.info.get(i.id).r === r).length, rt = roomType(r);
+    const o = n('outlet'), a = n('ac'), parts = [`ไฟ ${n('light') + n('fan')}`, `ปลั๊ก ${o}`].concat(a ? [`แอร์ ${a}`] : []), warn = rt === 'bed' && !o;
+    out.push(`<text x="${nn(X(r.x) + 1.6)}" y="${nn(Y(r.z + r.d) - 1.6)}" font-size="1.8" fill="${warn ? '#b45309' : '#475569'}">${parts.join(' · ')}${warn ? ' ⚠' : ''}</text>`);
+  }
+  pen.raw(`<g>${out.join('')}</g>`);
+  return P;
+}
+/* ---------- ประปา-สุขาภิบาล ---------- */
+const PLUMB_FIX = {
+  toilet: { nm: 'ชักโครก', drain: 'soil', inn: '½″', outd: '4″', to: 'ถังบำบัด' },
+  basin: { nm: 'อ่างล้างหน้า', drain: 'grey', inn: '½″', outd: '1¼″–2″', to: 'บ่อพัก' },
+  shower: { nm: 'ฝักบัว', drain: 'grey', inn: '½″ + น้ำร้อน', outd: '2″', to: 'บ่อพัก', hot: true },
+  bathtub: { nm: 'อ่างอาบน้ำ', drain: 'grey', inn: '½″ + น้ำร้อน', outd: '2″', to: 'บ่อพัก', hot: true },
+  counter: { nm: 'ซิงค์ครัว', drain: 'grey', inn: '½″', outd: '2″', to: 'บ่อดักไขมัน → บ่อพัก', gt: true },
+  washer: { nm: 'เครื่องซักผ้า', drain: 'grey', inn: '½″', outd: '2″', to: 'บ่อพัก' },
+  washer_top: { nm: 'เครื่องซักผ้า', drain: 'grey', inn: '½″', outd: '2″', to: 'บ่อพัก' },
+  floor_drain: { nm: 'ท่อระบายน้ำพื้น', drain: 'grey', outd: '2″', to: 'บ่อพัก' },
+  water_point: { nm: 'จุดน้ำดี (ก๊อก)', inn: '½″' },
+  heater: { nm: 'เครื่องทำน้ำอุ่น', inn: '½″', outd: 'PPR ½″ (น้ำร้อน)', to: 'ฝักบัว/อ่างอาบน้ำ' },
+};
+// จุดต่อท่อของสุขภัณฑ์ (ด้านหลังชิดผนัง) — ซิงค์อยู่ค่อนซ้ายของเคาน์เตอร์ยาว
+function fixPoint(it) {
+  if (it.type === 'counter') return toWorld(it, it.w >= 1.5 ? -it.w / 4 : 0, -it.d / 2 + 0.08);
+  if (['toilet', 'basin', 'washer', 'washer_top'].includes(it.type)) return toWorld(it, 0, -it.d / 2 + 0.06);
+  return [it.x, it.z];
+}
+function plumbFixtures(L) {
+  return itemsOf(L).filter(it => PLUMB_FIX[it.type] && !outsideHouse(it) && (it.type !== 'counter' || it.w >= 0.8));
+}
+function plumbSizes() {
+  const beds = state.rooms.filter(r => roomType(r) === 'bed').length, persons = Math.max(2, beds * 2);
+  const septic = persons <= 4 ? 800 : persons <= 6 ? 1200 : persons <= 8 ? 1600 : 2000;
+  const tank = [1000, 1500, 2000, 2500, 3000].find(v => v >= persons * 200) || 3000;
+  return { persons, septic, tank };
+}
+// ด้านที่ท่อออกนอกบ้าน: ขวา (e) หรือหน้า (s) — ด้านบน/ซ้ายของแบบมีเส้นบอกขนาดและแนวแกนเต็มแล้ว
+function plumbSide(L) {
+  const R = lvRect(L), fx = plumbFixtures(L); if (!fx.length) return 'e';
+  const cx = fx.reduce((a, it) => a + it.x, 0) / fx.length, cz = fx.reduce((a, it) => a + it.z, 0) / fx.length;
+  return R.x + R.w - cx <= R.z + R.d - cz ? 'e' : 's';
+}
+function drawPlumbOverlay(pen, L, X, Y, k, ht) {
+  const R = lvRect(L), fx = plumbFixtures(L), out = [], len = { sup: 0, hot: 0, grey: 0, soil: 0 };
+  if (!fx.length) return { len, fx };
+  const COL = { sup: '#2563eb', hot: '#dc2626', grey: '#16a34a', soil: '#92400e' }, W = { sup: 0.45, hot: 0.4, grey: 0.45, soil: 0.7 }, DASH = { grey: '1.6 0.7', soil: '2.2 0.7' };
+  const segSeen = new Set(); // ท่อรวมที่หลายจุดใช้ร่วมกัน นับความยาวครั้งเดียว
+  const path = (pts, t) => { for (let i = 0; i < pts.length - 1; i++) { const key = t + [pts[i], pts[i + 1]].map(p => p.map(v => Math.round(v * 2)).join(',')).sort().join('|'); if (segSeen.has(key)) continue; segSeen.add(key); len[t] += Math.hypot(pts[i + 1][0] - pts[i][0], pts[i + 1][1] - pts[i][1]) / k; } out.push(`<polyline points="${pts.map(p => nn(p[0]) + ',' + nn(p[1])).join(' ')}" fill="none" stroke="${COL[t]}" stroke-width="${W[t]}" stroke-linejoin="round"${DASH[t] ? ` stroke-dasharray="${DASH[t]}"` : ''}/>`); };
+  const tagT = (x, y, t, col) => { const w = t.length * 1.25 + 1.6; out.push(`<rect x="${nn(x - w / 2)}" y="${nn(y - 1.5)}" width="${nn(w)}" height="3" rx="0.7" fill="#fff" stroke="${col}" stroke-width="0.25"/><text x="${nn(x)}" y="${nn(y + 0.75)}" font-size="2" font-weight="700" fill="${col}" text-anchor="middle">${t}</text>`); };
+  // ห้องน้ำร้อน: เครื่องทำน้ำอุ่น → ฝักบัว/อ่างอาบน้ำในห้องเดียวกัน
+  for (const h of fx.filter(i => i.type === 'heater')) {
+    const r = mepRoom(h), [hx, hz] = [X(h.x), Y(h.z)];
+    for (const s of fx.filter(i => PLUMB_FIX[i.type].hot && roomAt(i.x, i.z, L) === r)) path([[hx, hz], [X(s.x), hz], [X(s.x), Y(s.z)]], 'hot');
+  }
+  if (L > 0) { // ชั้นบน: ท่อรวมลงชั้นล่างที่ "ช่องท่อ" กลางกลุ่มห้องน้ำ
+    const wet = fx.filter(i => PLUMB_FIX[i.type].drain), cx = X(wet.reduce((a, i) => a + i.x, 0) / Math.max(1, wet.length)), cy = Y(wet.reduce((a, i) => a + i.z, 0) / Math.max(1, wet.length));
+    for (const it of fx) { const [x, z] = fixPoint(it), F = PLUMB_FIX[it.type]; if (F.drain) path([[X(x), Y(z)], [cx, Y(z)], [cx, cy]], F.drain); if (F.inn) path([[X(x), Y(z) - 0.7], [cx + 1.2, Y(z) - 0.7], [cx + 1.2, cy]], 'sup'); }
+    out.push(`<rect x="${nn(cx - 2.6)}" y="${nn(cy - 2.6)}" width="5.2" height="5.2" fill="#fff" stroke="#000" stroke-width="0.3"/><text x="${nn(cx)}" y="${nn(cy + 0.8)}" font-size="2" text-anchor="middle" font-weight="700">⇣</text><text x="${nn(cx)}" y="${nn(cy + 5.6)}" font-size="1.9" text-anchor="middle" stroke="#fff" stroke-width="0.6" paint-order="stroke">ช่องท่อลงชั้นล่าง</text>`);
+    pen.raw(`<g>${out.join('')}</g>`); return { len, fx };
+  }
+  // ชั้นล่าง: ท่อออกนอกบ้านด้านขวา/หน้า แล้วเข้าถังบำบัด บ่อพัก บ่อดักไขมัน • น้ำดีมาจากถังน้ำ+ปั๊ม
+  const side = plumbSide(L), E = side === 'e';
+  const wall = E ? X(R.x + R.w) + ht : Y(R.z + R.d) + ht, inner = wall - 2 * ht - 1.6;
+  const lo = E ? Y(R.z) : X(R.x), hi = E ? Y(R.z + R.d) : X(R.x + R.w);
+  const P = (a, p) => (E ? [p, a] : [a, p]); // a = แนวตามผนัง, p = แนวตั้งฉาก (ค่ามาก = ออกนอกบ้าน)
+  const A = (x, z) => (E ? Y(z) : X(x)), Pp = (x, z) => (E ? X(x) : Y(z));
+  const has = t => state.items.some(i => i.type === t), S = plumbSizes();
+  const toilets = fx.filter(i => PLUMB_FIX[i.type].drain === 'soil'), greys = fx.filter(i => PLUMB_FIX[i.type].drain === 'grey' && !PLUMB_FIX[i.type].gt), sinks = fx.filter(i => PLUMB_FIX[i.type].gt);
+  const mean = (arr, d) => arr.length ? arr.reduce((a, i) => a + A(...fixPoint(i)), 0) / arr.length : d;
+  const band = wall + 26, mid = (lo + hi) / 2;
+  const eq = [];
+  if (toilets.length) eq.push({ key: 'septic', a: mean(toilets, mid), sz: 12, lbl: 'ถังบำบัด', sub: `${S.septic.toLocaleString('th-TH')} ล.`, real: has('septic_tank'), col: COL.soil, round: true });
+  if (greys.length || toilets.length || sinks.length) eq.push({ key: 'mh', a: mean(greys, mid) + 2, sz: 7, lbl: 'บ่อพัก', real: has('manhole'), col: '#475569' });
+  if (sinks.length) eq.push({ key: 'gt', a: mean(sinks, mid), sz: 6, lbl: 'GT', sub: 'ดักไขมัน', real: has('grease_trap'), col: COL.grey });
+  eq.push({ key: 'tank', a: hi - 4, sz: 11, lbl: 'ถังน้ำ+ปั๊ม', sub: `${S.tank.toLocaleString('th-TH')} ล.`, real: has('water_tank') || has('tank_pump'), col: COL.sup });
+  // จัดเรียงตามแนวผนัง ไม่ให้ทับกัน
+  eq.sort((a, b) => a.a - b.a);
+  for (let i = 0; i < eq.length; i++) { eq[i].a = Math.max(eq[i].a, lo + eq[i].sz / 2, i ? eq[i - 1].a + (eq[i - 1].sz + eq[i].sz) / 2 + 3 : -1e9); }
+  for (let i = eq.length - 1; i >= 0; i--) { eq[i].a = Math.min(eq[i].a, hi + 8 - eq[i].sz / 2, i < eq.length - 1 ? eq[i + 1].a - (eq[i + 1].sz + eq[i].sz) / 2 - 3 : 1e9); }
+  const Q = Object.fromEntries(eq.map(e => [e.key, e])), near = e => band - e.sz / 2; // ขอบด้านที่หันเข้าบ้าน
+  // ท่อน้ำโสโครก / น้ำทิ้ง: จากสุขภัณฑ์ออกผนังตรง ๆ แล้วไปตามแนวท่อรวมนอกบ้าน
+  // ท่อรวมในแต่ละห้อง (แบบในแผนผัง): น้ำทิ้ง/โสโครกวิ่งชิดผนังฝั่งตรงข้ามสุขภัณฑ์ น้ำดีวิ่งชิดผนังฝั่งสุขภัณฑ์
+  const laneOf = new Map(), lanes = it => {
+    const r = roomAt(it.x, it.z, L); if (!r || it.type === 'counter') return null;
+    if (!laneOf.has(r)) {
+      const inR = fx.filter(i => roomAt(i.x, i.z, L) === r), ca = inR.reduce((a, i) => a + A(...fixPoint(i)), 0) / inR.length;
+      const a0 = E ? Y(r.z) : X(r.x), a1 = E ? Y(r.z + r.d) : X(r.x + r.w), farHi = Math.abs(ca - a0) < Math.abs(ca - a1), far = farHi ? a1 : a0, nr = farHi ? a0 : a1, dir = farHi ? -1 : 1;
+      laneOf.set(r, { soil: far + dir * (ht + 3.2), grey: far + dir * (ht + 1.6), sup: nr - dir * (ht + 1.4) });
+    }
+    return laneOf.get(r);
+  };
+  const route = (it, t, colP, dst) => {
+    const [x, z] = fixPoint(it), a = A(x, z), p = Pp(x, z), ln = lanes(it);
+    path(ln ? [P(a, p), P(ln[t], p), P(ln[t], wall + colP), P(dst.a, wall + colP), P(dst.a, near(dst))] : [P(a, p), P(a, wall + colP), P(dst.a, wall + colP), P(dst.a, near(dst))], t);
+  };
+  toilets.forEach(it => route(it, 'soil', 4, Q.septic));
+  greys.forEach(it => route(it, 'grey', 7.5, Q.mh));
+  sinks.forEach(it => route(it, 'grey', 11, Q.gt));
+  if (Q.septic) path([P(Q.septic.a + (Q.mh.a > Q.septic.a ? 1 : -1) * 6, band), P(Q.mh.a, band)], 'grey');
+  if (Q.gt) path([P(Q.gt.a + (Q.mh.a > Q.gt.a ? 1 : -1) * 3, band), P(Q.mh.a, band)], 'grey');
+  // บ่อพัก → ท่อระบายสาธารณะ (ออกไปทางปลายแนว)
+  const mh = Q.mh, edge = band + 7;
+  path([P(mh.a, band + mh.sz / 2), P(mh.a, edge)], 'grey');
+  out.push(arrowSVG(...P(mh.a, edge), E ? 0 : Math.PI / 2, 3, COL.grey, ''));
+  out.push(`<text x="${nn(P(mh.a, edge + 4.5)[0])}" y="${nn(P(mh.a, edge + 4.5)[1])}" font-size="1.9" fill="${COL.grey}" text-anchor="middle"${E ? ` transform="rotate(-90 ${nn(P(mh.a, edge + 4.5)[0])} ${nn(P(mh.a, edge + 4.5)[1])})"` : ''}>ท่อระบายสาธารณะ · ลาด 1:100</text>`);
+  // น้ำดี: ถังน้ำ+ปั๊ม → เข้าผนัง → ท่อเมนตามแนวผนังด้านใน → แยกเข้าแต่ละจุด
+  const sup = fx.filter(i => PLUMB_FIX[i.type].inn), tk = Q.tank;
+  if (sup.length) {
+    const supA = it => lanes(it)?.sup ?? A(...fixPoint(it)) - 0.8, as = sup.map(supA), a0 = Math.min(...as, tk.a), a1 = Math.max(...as, tk.a);
+    path([P(tk.a, near(tk)), P(tk.a, inner)], 'sup');
+    path([P(a0, inner), P(a1, inner)], 'sup');
+    for (const it of sup) { const [x, z] = fixPoint(it), a = supA(it), p = Pp(x, z); path(lanes(it) ? [P(a, inner), P(a, p), P(A(x, z), p)] : [P(a, inner), P(a, p)], 'sup'); }
+    out.push(arrowSVG(...P(tk.a, edge + 2), E ? Math.PI : -Math.PI / 2, 3, COL.sup, ''));
+    const mt = P(tk.a, edge + 4.5); out.push(`<text x="${nn(mt[0])}" y="${nn(mt[1])}" font-size="1.9" fill="${COL.sup}" text-anchor="middle"${E ? ` transform="rotate(-90 ${nn(mt[0])} ${nn(mt[1])})"` : ''}>จากมิเตอร์ประปา</text>`);
+    path([P(tk.a, edge - 1), P(tk.a, band + tk.sz / 2)], 'sup');
+    const tp = P((a0 + a1) / 2, inner); tagT(tp[0] + (E ? -4.5 : 0), tp[1] + (E ? 0 : -2.6), 'PVC ¾″', COL.sup);
+  }
+  // อุปกรณ์นอกบ้าน (เส้นประ = ตำแหน่งแนะนำ ยังไม่มีในแบบ)
+  for (const e of eq) {
+    const [cx, cy] = P(e.a, band), dash = e.real ? '' : ' stroke-dasharray="1.4 0.8"';
+    out.push(e.round ? `<circle cx="${nn(cx)}" cy="${nn(cy)}" r="${e.sz / 2}" fill="#fff" stroke="${e.col}" stroke-width="0.4"${dash}/>` : `<rect x="${nn(cx - e.sz / 2)}" y="${nn(cy - e.sz / 2 * 0.8)}" width="${e.sz}" height="${nn(e.sz * 0.8)}" rx="0.8" fill="#fff" stroke="${e.col}" stroke-width="0.4"${dash}/>`);
+    out.push(`<text x="${nn(cx)}" y="${nn(cy + (e.sub ? -0.3 : 0.7))}" font-size="${e.sz >= 10 ? 2.1 : 1.8}" font-weight="700" fill="${e.col}" text-anchor="middle">${e.lbl}</text>`);
+    if (e.sub) out.push(`<text x="${nn(cx)}" y="${nn(cy + 2.2)}" font-size="1.6" fill="${e.col}" text-anchor="middle">${e.sub}</text>`);
+    if (!e.real) out.push(`<text x="${nn(cx)}" y="${nn(cy + e.sz / 2 + 2.4)}" font-size="1.5" fill="#64748b" text-anchor="middle">(แนะนำ)</text>`);
+  }
+  // ป้ายขนาดท่อ (1 ป้ายต่อชนิด ที่ท่อเส้นแรก)
+  const lab = (it, t, txt) => { if (!it) return; const [x, z] = fixPoint(it), ln = lanes(it), p = P(ln ? ln[t] : A(x, z), (Pp(x, z) + wall) / 2); tagT(p[0] + (E ? 0 : (t === 'soil' ? -3 : 3)), p[1] + (E ? (t === 'soil' ? -2.2 : 2.2) : 0), txt, COL[t]); };
+  lab(toilets[0], 'soil', 'PVC 4″'); lab(greys[0], 'grey', 'PVC 2″');
+  const hh = fx.find(i => i.type === 'heater'); if (hh) tagT(X(hh.x), Y(hh.z) + 3, 'PPR ½″', COL.hot);
+  pen.raw(`<g>${out.join('')}</g>`);
+  return { len, fx, eq };
+}
+function plumbChecks() {
+  const c = [], has = t => state.items.some(i => i.type === t), S = plumbSizes();
+  const fx = state.levels.flatMap((_, L) => plumbFixtures(L));
+  if (!fx.length) return [[false, 'ยังไม่มีสุขภัณฑ์ในแบบ — วางชักโครก อ่างล้างหน้า ฝักบัว จากหมวด "ห้องน้ำ"']];
+  for (const r of state.rooms.filter(r => roomType(r) === 'bath')) {
+    const inR = i => itemLevel(i) === (r.level || 0) && i.x >= r.x && i.x <= r.x + r.w && i.z >= r.z && i.z <= r.z + r.d;
+    if (!state.items.some(i => ['floor_drain', 'shower'].includes(i.type) && inR(i))) c.push([false, `${r.name} ยังไม่มีท่อระบายน้ำพื้น`]);
+    const h = state.items.find(i => i.type === 'heater' && inR(i));
+    if (h && !state.items.some(i => ['shower', 'bathtub'].includes(i.type) && inR(i))) c.push([false, `${r.name} มีเครื่องทำน้ำอุ่นแต่ไม่มีฝักบัว/อ่างอาบน้ำ`]);
+  }
+  if (!c.length) c.push([true, 'ห้องน้ำทุกห้องมีท่อระบายน้ำพื้น']);
+  if (fx.some(i => i.type === 'toilet')) c.push(has('septic_tank') ? [true, 'มีถังบำบัดน้ำเสียในแบบแล้ว'] : [false, `ยังไม่มีถังบำบัดในแบบ (แนะนำ ${S.septic.toLocaleString('th-TH')} ล. สำหรับ ~${S.persons} คน) — แสดงตำแหน่งแนะนำเป็นเส้นประ`]);
+  if (fx.some(i => i.type === 'counter')) c.push(has('grease_trap') ? [true, 'ครัวมีบ่อดักไขมันแล้ว'] : [false, 'ครัวยังไม่มีบ่อดักไขมัน — ควรมีก่อนลงบ่อพัก กันท่อตันจากเศษอาหาร/ไขมัน']);
+  c.push(has('water_tank') || has('tank_pump') ? [true, 'มีถังเก็บน้ำในแบบแล้ว'] : [false, `ยังไม่มีถังเก็บน้ำ + ปั๊ม (แนะนำ ${S.tank.toLocaleString('th-TH')} ล.)`]);
+  if (c.some(x => !x[0] && /ถังบำบัด|ดักไขมัน|ถังเก็บน้ำ/.test(x[1]))) c.push([false, 'กด "🚽 วางถังบำบัด บ่อพัก ถังน้ำ อัตโนมัติ" ในแผงห้อง (ชั้น 1) เพื่อเพิ่มเข้าแบบ']);
+  return c;
+}
+// แผ่นตาราง: วงจรไฟฟ้า/โหลด + สุขภัณฑ์/ท่อ + ผลตรวจ
+function mepTableSheet(o, plumbLen) {
+  const chk = list => `<div class="mchk">${list.map(([ok, t]) => `<div><b class="${ok ? 'ok' : 'no'}">${ok ? '✓' : '⚠'}</b> ${esc(t)}</div>`).join('')}</div>`;
+  let left = '', right = '';
+  if (o.elec) {
+    const P = elecPlan();
+    left = `<h3>⚡ ตารางวงจรไฟฟ้า (Load Schedule)</h3>${P.circuits.length ? `<table><tr><th>วงจร</th><th>รายการ</th><th class="num">จุด</th><th class="num">VA</th><th>เบรกเกอร์</th><th>สาย THW</th></tr>
+      ${P.circuits.map(c => `<tr><td><b style="color:${c.col}">${c.id}</b></td><td>${esc(c.name)}</td><td class="num">${c.n}</td><td class="num">${c.va.toLocaleString('th-TH')}</td><td>${c.br}</td><td>${c.wire} มม²</td></tr>`).join('')}
+      <tr class="tot"><td colspan="3">รวมโหลดติดตั้ง</td><td class="num">${P.va.toLocaleString('th-TH')}</td><td colspan="2">ตู้ไฟ ${P.ways} ช่อง</td></tr></table>
+      <p>โหลดใช้งานจริงประมาณ ×0.6 ≈ <b>${(P.demand / 1000).toFixed(1)} kVA ≈ ${Math.round(P.amps)} A</b> → มิเตอร์ <b>${P.meter}</b> · เมนเบรกเกอร์ <b>${P.main}A</b> · สายเมน ${P.mainWire} มม²<br><small>ค่า VA มาตรฐาน: ดวงไฟ 100 · ปลั๊ก 180 · ปลั๊กครัวรวมอย่างน้อย 2,000 · แอร์ 1,300–1,900 · เครื่องทำน้ำอุ่น 4,500 — ค่าประมาณเบื้องต้น ช่างไฟ/วิศวกรต้องคำนวณยืนยัน</small></p>` : '<p>ยังไม่มีจุดไฟฟ้าในแบบ</p>'}
+      <h3>ตรวจแบบไฟฟ้า</h3>${chk(P.checks)}`;
+  }
+  if (o.plumb) {
+    const S = plumbSizes(), fx = state.levels.flatMap((_, L) => plumbFixtures(L)), cnt = {};
+    fx.forEach(it => { const n = PLUMB_FIX[it.type].nm; cnt[n] = cnt[n] || { F: PLUMB_FIX[it.type], n: 0 }; cnt[n].n++; });
+    const L = plumbLen || { sup: 0, hot: 0, grey: 0, soil: 0 }, m = v => Math.ceil(v * 1.15);
+    right = `<h3>🚿 ตารางสุขภัณฑ์และท่อ</h3>${fx.length ? `<table><tr><th>รายการ</th><th class="num">จำนวน</th><th>น้ำเข้า</th><th>น้ำออก</th><th>ปลายทาง</th></tr>
+      ${Object.entries(cnt).map(([n, { F, n: c }]) => `<tr><td>${n}</td><td class="num">${c}</td><td>${F.inn || '-'}</td><td>${F.outd || '-'}</td><td>${F.to || '-'}</td></tr>`).join('')}
+      <tr class="tot"><td colspan="5">ความยาวท่อประมาณ (ชั้น 1, +15%): น้ำดี ${m(L.sup)} ม. · น้ำร้อน ${m(L.hot)} ม. · น้ำทิ้ง 2″ ${m(L.grey)} ม. · โสโครก 4″ ${m(L.soil)} ม.</td></tr></table>
+      <p>ผู้อยู่อาศัยประมาณ ${S.persons} คน → ถังบำบัด <b>${S.septic.toLocaleString('th-TH')} ลิตร</b> · ถังเก็บน้ำ ${S.persons} คน × 200 ล./วัน → <b>${S.tank.toLocaleString('th-TH')} ลิตร</b> + ปั๊มอัตโนมัติ 250–300 W<br>
+      <small>ท่อน้ำดี PVC ชั้น 13.5 (เมน ¾″ แยกเข้าจุด ½″) · น้ำร้อน PPR ½″ · น้ำทิ้ง PVC 2″ ลาดเอียงอย่างน้อย 1:100 · ชักโครก PVC 4″ ลงถังบำบัด · มีท่อระบายอากาศที่ถังบำบัด — แนวท่อเป็นแนวทาง ให้ช่างประปาตรวจหน้างาน</small></p>` : '<p>ยังไม่มีสุขภัณฑ์ในแบบ</p>'}
+      <h3>ตรวจแบบประปา</h3>${chk(plumbChecks())}`;
+  }
+  return `<div class="full"><style>.mcols{display:grid;grid-template-columns:1fr 1fr;gap:6mm}.mcols h3{margin-top:2mm}.mcols p{margin:2mm 0 3mm;line-height:1.5}.mchk div{padding:.6mm 0;border-bottom:.2mm dashed #ddd}.mchk b.ok{color:#15803d}.mchk b.no{color:#b45309}td.num,th.num{text-align:right}</style>
+    <div class="mcols"><div>${left || right}</div><div>${left ? right : ''}</div></div></div>`;
+}
+/* ---------- วางถังบำบัด บ่อพัก บ่อดักไขมัน ถังน้ำ+ปั๊ม อัตโนมัติ (ชั้น 1 นอกบ้าน ด้านเดียวกับที่ท่อออก) ---------- */
+function autoPlumb() {
+  const L = 0, R = lvRect(L), fx = plumbFixtures(L), has = t => state.items.some(i => i.type === t), added = [];
+  if (!fx.length) { toast('ยังไม่มีสุขภัณฑ์ในชั้น 1 — วางชักโครก อ่างล้างหน้า ฝักบัว ก่อน', { type: 'warn' }); return; }
+  const E = plumbSide(L) === 'e', mean = arr => arr.reduce((a, i) => a + (E ? i.z : i.x), 0) / arr.length;
+  const put = (type, along, out) => {
+    const saved = curLevel; curLevel = L; const it = newItem(type); curLevel = saved; it.level = L;
+    for (const da of [0, 0.6, -0.6, 1.2, -1.2, 1.8, -1.8, 2.6, -2.6]) for (const dp of [0, 0.5, 1.0]) {
+      const a = along + da, p = out + dp + (E ? it.w : it.d) / 2;
+      it.x = E ? R.x + R.w + p : a; it.z = E ? a : R.z + R.d + p;
+      if (!collides(it)) { state.items.push(it); added.push(it); return it; }
+    }
+    return null;
+  };
+  const toilets = fx.filter(i => i.type === 'toilet'), sinks = fx.filter(i => i.type === 'counter');
+  if (toilets.length && !has('septic_tank')) put('septic_tank', mean(toilets), 0.6);
+  if (!has('manhole')) put('manhole', mean(fx), 0.5);
+  if (sinks.length && !has('grease_trap')) put('grease_trap', mean(sinks), 0.4);
+  if (!has('water_tank') && !has('tank_pump')) put('tank_pump', (E ? R.z + R.d : R.x + R.w) - 1.2, 0.5);
+  added.forEach(addItemObject); rebuildSite(); commit();
+  toast(added.length ? `วางให้แล้ว ${added.length} รายการ: ${added.map(i => CATALOG[i.type].name).join(' · ')} — ลากย้ายได้` : 'มีครบแล้ว หรือไม่มีที่ว่างรอบบ้านด้านที่ท่อออก', { type: added.length ? 'ok' : 'warn', ms: 5000 });
+}
+// --- 3D: ถังบำบัด (ฝังดิน เห็นฝาคอนกรีต + ท่อระบายอากาศ) / บ่อพัก / บ่อดักไขมัน ---
+function buildSeptic(it) {
+  const g = new THREE.Group(), { w, d, h } = it, r = Math.min(w, d) / 2, conc = M(it.color, { r: .9 }), lid = M(shade(it.color, -.15), { r: .8 }), pvc = M('#e5e7eb', { r: .5 });
+  C(g, r, r, 0.05, 0, 0, 0, conc, 32);
+  for (const sx of [-1, 1]) { C(g, r * 0.32, r * 0.32, 0.03, sx * r * 0.42, 0.05, 0, lid, 24); B(g, r * 0.25, 0.012, 0.03, sx * r * 0.42, 0.08, 0, M('#4b5563')); }
+  C(g, 0.03, 0.03, Math.max(0.3, h - 0.05), r * 0.75, 0.05, -r * 0.5, pvc, 12); // ท่อระบายอากาศ
+  const cap = C(g, 0.05, 0.035, 0.06, r * 0.75, h - 0.06, -r * 0.5, pvc, 12);
+  return g;
+}
+function buildPitLid(it) {
+  const g = new THREE.Group(), { w, d } = it, conc = M(it.color, { r: .9 });
+  B(g, w, 0.04, d, 0, 0, 0, conc); B(g, w * 0.78, 0.015, d * 0.78, 0, 0.04, 0, M(shade(it.color, -.12), { r: .8 }));
+  B(g, w * 0.3, 0.012, 0.03, 0, 0.055, 0, M('#4b5563'));
+  return g;
 }
 // เลือกมาตราส่วนมาตรฐานที่ใหญ่ที่สุดที่ยังพอดีกระดาษ
 function pickScale(needW, needH, availW, availH, pref) {
@@ -9695,7 +10314,7 @@ function drawFootprint(pen, it, k, X, Y, furniture, num) {
   } else if (!furniture && small > 9) pen.text(cx, cy + 0.6, it.name, 1.6, { halo: true });
 }
 // สัญลักษณ์ไฟฟ้า/ประปา (ขนาดคงที่บนกระดาษ อ่านง่ายทุกมาตราส่วน)
-const MEP_LEGEND = { outlet: '⊖ ปลั๊ก', switch: 'S สวิตช์', light: '⊗ ดวงไฟ', fan: '✻ พัดลมเพดาน', ac: 'AC แอร์', acout: 'CDU คอยล์ร้อน', water: '● จุดน้ำดี', drain: '▣ FD ท่อระบายพื้น', heater: 'WH น้ำอุ่น', db: 'DB ตู้ไฟ', wifi: 'AP จุด Wi‑Fi' };
+const MEP_LEGEND = { septic: '◎ ถังบำบัด', mh: '▢ บ่อพัก', gt: 'GT บ่อดักไขมัน', outlet: '⊖ ปลั๊ก', switch: 'S สวิตช์', light: '⊗ ดวงไฟ', fan: '✻ พัดลมเพดาน', ac: 'AC แอร์', acout: 'CDU คอยล์ร้อน', water: '● จุดน้ำดี', drain: '▣ FD ท่อระบายพื้น', heater: 'WH น้ำอุ่น', db: 'DB ตู้ไฟ', wifi: 'AP จุด Wi‑Fi' };
 function drawMepSymbol(pen, it, X, Y) {
   const x = X(it.x), y = Y(it.z), m = CATALOG[it.type].mep, g = [];
   const C = (r, f = '#fff') => g.push(`<circle cx="0" cy="0" r="${r}" fill="${f}" stroke="#000" stroke-width="0.2"/>`);
@@ -9713,6 +10332,9 @@ function drawMepSymbol(pen, it, X, Y) {
   else if (m === 'heater') { Rr(3.6, 2); T('WH', 1.3); }
   else if (m === 'db') { Rr(4, 2.4); g.push('<rect x="-2" y="-1.2" width="2" height="2.4" fill="#000"/>'); }
   else if (m === 'wifi') { C(1.7); T('AP', 1.3); }
+  else if (m === 'septic') { C(4); T('ST', 1.8); }
+  else if (m === 'mh') { Rr(3, 3); T('MH', 1.2); }
+  else if (m === 'gt') { Rr(3, 2.4); T('GT', 1.2); }
   pen.raw(`<g transform="translate(${nn(x)} ${nn(y)})">${g.join('')}</g>`);
 }
 // สัญลักษณ์ประตู/หน้าต่างในแปลน
@@ -9764,6 +10386,7 @@ function planScale(dw, dh, pref) {
   const t = state.house.wallThickness, Mg = 40;
   return pickScale(state.house.width + t, state.house.depth + t, dw - 2 * Mg, dh - 2 * Mg, pref);
 }
+let lastPlumbLen = null;
 function planSVG(L, sc, furniture) {
   const H = state.house, t = H.wallThickness, Mg = 40, R = lvRect(L), E = slabRect(L);
   const k = 1000 / sc, X = x => Mg + (x - E.x) * k, Y = z => Mg + (z - E.z) * k, ht = t / 2 * k;
@@ -9781,7 +10404,7 @@ function planSVG(L, sc, furniture) {
     }
   }
   // เฟอร์นิเจอร์/สุขภัณฑ์ (พรมวาดก่อน จะได้ไม่ทับของอื่น) — ของนอกบ้านไปอยู่ในผังบริเวณ
-  const mepSheet = furniture === 'mep';
+  const mepSheet = ['mep', 'elec', 'plumb'].includes(furniture), PLUMB_M = new Set(['water', 'drain', 'heater']);
   const furn = itemsOf(L).filter(it => !isWallMount(it) && !isMep(it) && it.type !== 'wall_extra' && !outsideHouse(it) && (furniture === true || PLAN_FIXTURES.has(it.type)))
     .sort((a, b) => (b.type === 'rug') - (a.type === 'rug'));
   furn.forEach(it => drawFootprint(pen, it, k, X, Y, furniture === true, nums.get(it.id)));
@@ -9798,7 +10421,7 @@ function planSVG(L, sc, furniture) {
   }
   for (const it of itemsOf(L)) if (it.type === 'wall_extra') pen.poly(itemCorners(it).map(([x, z]) => [X(x), Y(z)]), { fill: '#2b2b2b', sw: 0 });
   for (const it of itemsOf(L)) if (isWallMount(it)) drawOpeningPlan(pen, it, k, X, Y, t, mepSheet ? null : tags.get(it.id));
-  if (mepSheet) itemsOf(L).filter(isMep).forEach(it => drawMepSymbol(pen, it, X, Y));
+  if (mepSheet) itemsOf(L).filter(it => isMep(it) && !CATALOG[it.type].outdoor && (furniture === 'mep' || (furniture === 'elec' ? isElec(it) : PLUMB_M.has(CATALOG[it.type].mep)))).forEach(it => drawMepSymbol(pen, it, X, Y));
   // ชื่อห้อง + พื้นที่ + ขนาด
   for (const r of roomsOf(L)) {
     const fs = clamp(Math.min(r.w, r.d) * k / 11, 1.8, 3.6), cx = X(r.x + r.w / 2);
@@ -9831,6 +10454,8 @@ function planSVG(L, sc, furniture) {
   // วงกลมชื่อแนวแกน A, B, C… / 1, 2, 3…
   ax.forEach((x, i) => { const cy = top - 32.5; pen.line(X(x), cy + 3, X(x), top - 26, 0.1, 'stroke-dasharray="3 1 0.6 1"'); pen.circle(X(x), cy, 3); pen.text(X(x), cy + 1.1, String.fromCharCode(65 + (i % 26)), 3, { weight: 700 }); });
   az.forEach((z, i) => { const cx = left - 32.5; pen.line(cx + 3, Y(z), left - 26, Y(z), 0.1, 'stroke-dasharray="3 1 0.6 1"'); pen.circle(cx, Y(z), 3); pen.text(cx, Y(z) + 1.1, String(i + 1), 3, { weight: 700 }); });
+  if (furniture === 'elec') drawElecOverlay(pen, L, X, Y);
+  if (furniture === 'plumb') { const r = drawPlumbOverlay(pen, L, X, Y, k, ht); if (L === 0) lastPlumbLen = r.len; }
   northArrowSVG(pen, E.w * k + 2 * Mg - 12, 12);
   return pen.svg(E.w * k + 2 * Mg, E.d * k + 2 * Mg);
 }
@@ -10052,13 +10677,23 @@ function buildPrintHTML(o) {
     if (!itemsOf(L).some(it => !isWallMount(it) && !outsideHouse(it))) return;
     sheets.push({ title: `แปลนจัดวางเฟอร์นิเจอร์${lvTitle(L) ? ' ' + lvTitle(L) : ''}`, s: ps.s, body: planSVG(L, ps.s, true), notes: ['หมายเลขในแปลนตรงกับรายการเฟอร์นิเจอร์', 'ใช้ประกอบการวางตำแหน่งปลั๊กไฟ สวิตช์ และจุดน้ำดี/น้ำทิ้ง'] });
   });
-  if (o.mep) state.levels.forEach((_, L) => {
-    const pts = itemsOf(L).filter(isMep); if (!pts.length) return;
-    const cnt = {}; pts.forEach(it => { const m = CATALOG[it.type].mep; cnt[m] = (cnt[m] || 0) + 1; });
-    sheets.push({ title: `แบบไฟฟ้าและประปา${lvTitle(L) ? ' ' + lvTitle(L) : ''}`, s: ps.s, body: planSVG(L, ps.s, 'mep'), notes: [
-      Object.entries(cnt).map(([m, n]) => `${MEP_LEGEND[m]} ${n}`).join(' · '),
-      'ปลั๊กสูง 30 ซม. สวิตช์ 120 ซม. แอร์ 220 ซม. จากพื้น (ยกเว้นระบุ)', 'ตำแหน่งเป็นแนวทาง ช่างไฟฟ้าต้องออกแบบวงจร ขนาดสาย และเบรกเกอร์ตามมาตรฐาน วสท.'] });
+  if (o.elec) state.levels.forEach((_, L) => {
+    if (!itemsOf(L).some(isElec)) return;
+    sheets.push({ title: `แบบไฟฟ้า${lvTitle(L) ? ' ' + lvTitle(L) : ''}`, s: ps.s, body: planSVG(L, ps.s, 'elec'), notes: [
+      '⊗ ดวงไฟ · S สวิตช์ · ⊖ ปลั๊ก · AC แอร์ · WH เครื่องทำน้ำอุ่น · AP Wi‑Fi · ▮ DB ตู้ไฟ',
+      'เส้นประ = สวิตช์→ดวงไฟที่คุม · เส้นสี = สายในวงจรเดียวกัน · ลูกศร C1, C2… = เดินสายกลับตู้ไฟ (ตารางวงจรอยู่แผ่น "ตารางไฟฟ้า-ประปา")',
+      'ปลั๊กสูง 0.30 ม. สวิตช์ 1.20 ม. แอร์ 2.20 ม. จากพื้น (ยกเว้นระบุ)', 'ค่าประมาณเบื้องต้น — ช่างไฟฟ้า/วิศวกรต้องตรวจขนาดสาย เบรกเกอร์ และการต่อลงดินตามมาตรฐาน วสท.'] });
   });
+  lastPlumbLen = null;
+  if (o.plumb) state.levels.forEach((_, L) => {
+    if (!plumbFixtures(L).length) return;
+    sheets.push({ title: `แบบประปา-สุขาภิบาล${lvTitle(L) ? ' ' + lvTitle(L) : ''}`, s: ps.s, body: planSVG(L, ps.s, 'plumb'), notes: [
+      'น้ำเงิน = น้ำดี PVC (เมน ¾″ แยกเข้าจุด ½″) · แดง = น้ำร้อน PPR ½″ · เขียวประ = น้ำทิ้ง PVC 2″ · น้ำตาลประ = น้ำโสโครก PVC 4″',
+      'กรอบเส้นประ = ตำแหน่งแนะนำ (ยังไม่มีในแบบ) · ST ถังบำบัด · MH บ่อพัก · GT บ่อดักไขมัน · ท่อน้ำทิ้งลาดอย่างน้อย 1:100',
+      'แนวท่อเป็นแผนผังแนวทาง — ช่างประปาตรวจหน้างาน ตำแหน่งท่อในผนัง/ใต้พื้น และระยะถังบำบัดจากแนวเขต'] });
+  });
+  if ((o.elec && state.items.some(isElec)) || (o.plumb && state.levels.some((_, L) => plumbFixtures(L).length)))
+    sheets.push({ title: 'ตารางไฟฟ้า-ประปา', body: mepTableSheet({ elec: o.elec, plumb: o.plumb }, lastPlumbLen), notes: ['ตัวเลขทั้งหมดเป็นค่าประมาณจากแบบร่าง', 'ช่างไฟฟ้า/ช่างประปา/วิศวกรต้องตรวจและคำนวณยืนยันก่อนติดตั้ง'] });
   if (o.elev) {
     const r = elevationsSheet(dw, dh);
     sheets.push({ title: 'รูปด้าน 4 ด้าน', s: r.s, body: r.body, notes: ['ระดับ ±0.00 = ผิวพื้นภายในบ้าน', 'ขนาดเป็นเมตร ความสูงวัดจากผิวพื้น', 'ด้านหน้า = ฝั่งล่างของแปลน (Z มากสุด)', 'ไม่ได้แสดงหลังคา กันสาด และโครงสร้าง'] });
@@ -10123,11 +10758,11 @@ ${sheets.map((sh, i) => `<section class="sheet"><div class="frame"><div class="d
    รายงานลูกค้า: เอกสาร A4 แนวตั้งไฟล์เดียว — ปก (ภาพบ้านตุ๊กตา) • ภาพรวม + ตารางห้องและวัสดุ • แปลนทุกชั้นพร้อมเส้นบอกขนาด • BOQ + งวดงาน
    ภาพทุกภาพเรนเดอร์จากแบบจริง (สลับมุมมองชั่วคราวแล้วคืนค่าเดิม)
    ========================================================= */
-const REPORT_PARTS = [['cover', '🏠 ปก: ภาพบ้านตุ๊กตา + ข้อมูลสรุป'], ['overview', '🧾 ภาพรวม: ภาพแยกชั้น/มองจากด้านบน + ตารางห้องและวัสดุ'], ['plans', '📐 แปลนพื้นทุกชั้นพร้อมเส้นบอกขนาด'], ['boq', '🧮 ประมาณราคา (BOQ) + งวดงาน']];
+const REPORT_PARTS = [['cover', '🏠 ปก: ภาพบ้านตุ๊กตา + ข้อมูลสรุป'], ['overview', '🧾 ภาพรวม: ภาพแยกชั้น/มองจากด้านบน + ตารางห้องและวัสดุ'], ['plans', '📐 แปลนพื้นทุกชั้นพร้อมเส้นบอกขนาด'], ['heights', '📏 แปลนป้ายความสูงติดตั้ง + ตาราง (ให้ช่างไฟ/ประปา/ช่างหน้าต่าง)'], ['boq', '🧮 ประมาณราคา (BOQ) + งวดงาน']];
 let reportPrefs = { cover: true, overview: true, plans: true, boq: true }; try { Object.assign(reportPrefs, JSON.parse(localStorage.getItem('homeDesigner3D.report') || '{}')); } catch (e) { }
 function captureReportImages(parts) {
   const keep = { mode, dollOn, planStyle, lv: curLevel, pos: perspCam.position.clone(), tgt: orbit.target.clone(), fov: perspCam.fov, op: orthoCam.position.clone(), ot: planCtl.target.clone(), oz: orthoCam.zoom, os: orthoSize, sel, pr: renderer.getPixelRatio(), exT: dollExT, cut: dollCut, cs: dollCutStyle, night: nightMode };
-  const out = { plans: [] }, frames = () => { for (let i = 0; i < 3; i++) { updateViewStyle(); updateDollCut(vstyle() === 'doll'); updateRoomHandles(); } };
+  const hlKeep = hlOn, out = { plans: [], hplans: [] }, frames = () => { for (let i = 0; i < 3; i++) { updateViewStyle(); updateDollCut(vstyle() === 'doll'); updateRoomHandles(); } };
   const snap = q => renderSnapshot({ noCaption: true }).toDataURL('image/jpeg', q || 0.88);
   select(null); if (nightMode) setNight(false);
   renderer.setPixelRatio(Math.min(2, Math.max(1.5, keep.pr))); resize();
@@ -10145,10 +10780,15 @@ function captureReportImages(parts) {
     const framePlan = L => { const R = lvRect(L), a = vw / vh; orthoSize = Math.max(R.d + 5.2, (R.w + 5.2) / a); orthoCam.zoom = 1; updateOrtho(); orthoCam.position.set(R.x + R.w / 2, lvBase(L) + 60, R.z + R.d / 2); planCtl.target.set(R.x + R.w / 2, lvBase(L), R.z + R.d / 2); planCtl.update(); };
     if (parts.overview) { setView('plan'); setPlanStyle('real'); curLevel = 0; updateLevelVisibility(); framePlan(0); frames(); out.top = snap(0.88); }
     if (parts.plans) {
-      setView('plan'); setPlanStyle('bw');
+      setView('plan'); setPlanStyle('bw'); hlOn = false;
       state.levels.forEach((lv, L) => { curLevel = L; updateLevelVisibility(); rebuildLabels(); framePlan(L); bwDimDirty = true; frames(); out.plans.push({ L, img: snap(0.9) }); });
     }
+    if (parts.heights) {
+      setView('plan'); setPlanStyle('bw'); hlOn = true;
+      state.levels.forEach((lv, L) => { if (!hlItems(L).length) return; curLevel = L; updateLevelVisibility(); rebuildLabels(); framePlan(L); bwDimDirty = true; hlKey = ''; frames(); out.hplans.push({ L, img: snap(0.9) }); });
+    }
   } finally {
+    hlOn = hlKeep; hlKey = '';
     setPlanStyle(keep.planStyle); curLevel = Math.min(keep.lv, state.levels.length - 1);
     setView(keep.mode === 'orbit' && keep.dollOn ? 'doll' : keep.mode);
     dollExT = keep.exT; dollCut = keep.cut; dollCutStyle = keep.cs; cutSig = '';
@@ -10185,6 +10825,12 @@ function buildClientReport(parts) {
   }
   if (parts.plans) img.plans.forEach(p => pages.push(`<section class="page">${head(`แปลนพื้น${state.levels.length > 1 ? ' ' + esc(lvName(p.L)) : ''}`, 'ขนาดเป็นเมตร วัดถึงแนวกึ่งกลางผนัง · เส้นบอกขนาดแถวใน = ช่องประตู/หน้าต่าง · แถวกลาง = ห้อง · แถวนอก = ขนาดรวม')}
     <div class="plan"><img src="${p.img}"></div>${foot()}</section>`));
+  if (parts.heights) {
+    img.hplans.forEach(p => pages.push(`<section class="page">${head(`แปลนความสูงติดตั้ง${state.levels.length > 1 ? ' ' + esc(lvName(p.L)) : ''}`, 'เมตร วัดจากพื้นห้อง ±0.00 · หน้าต่าง = ขอบล่าง–ขอบบน · ส. = ความสูงประตู · + = ระดับขอบล่างของปลั๊ก/สวิตช์/แอร์/ตู้')}
+    <div class="plan"><img src="${p.img}"></div>${foot()}</section>`));
+    pages.push(`<section class="page">${head('ตารางความสูงติดตั้ง', 'สำหรับช่างไฟฟ้า ช่างประปา และช่างติดตั้งประตู-หน้าต่าง — ตรวจกับหน้างานจริงก่อนเจาะผนัง')}
+    <div style="display:flex;gap:6mm;align-items:flex-start"><div class="boq" style="flex:1">${heightTableHTML(state.levels.map((_, i) => i), '')}</div>${heightSectionSVG(state.levels.map((_, i) => i))}</div>${foot()}</section>`);
+  }
   if (parts.boq) boqSheets(32).forEach((body, i, arr) => pages.push(`<section class="page">${head(`ประมาณราคาวัสดุและค่าก่อสร้าง${arr.length > 1 ? ` (${i + 1}/${arr.length})` : ''}`, i ? '' : `รวมประมาณ ${Math.round(E.total).toLocaleString('th-TH')} บาท · ≈ ${Math.round(E.perM2).toLocaleString('th-TH')} บาท/ตร.ม. — คลาดเคลื่อนได้ ±20–30%`)}
     <div class="boq">${body}</div>${i === arr.length - 1 ? `<p class="note">ราคาเป็นราคาประมาณ แตกต่างตามพื้นที่และช่วงเวลา ควรขอใบเสนอราคาจากผู้รับเหมาอย่างน้อย 3 ราย • ไม่รวมเฟอร์นิเจอร์ลอยตัว เครื่องใช้ไฟฟ้า ค่าออกแบบ/ขออนุญาต • ${esc(PRICE_SOURCE_NOTE)}</p>` : ''}${foot()}</section>`));
   const title = `${pj.name || 'แบบบ้าน'} — รายงาน`;
@@ -10252,7 +10898,7 @@ function showPrintDialog() {
   const pj = state.project, pp = printPrefs;
   const sheetOpts = [['plan', '📐 แปลนพื้นพร้อมเส้นบอกขนาด (สำหรับช่าง)'], ['furn', '🛋️ แปลนจัดวางเฟอร์นิเจอร์'], ['elev', '🏠 รูปด้าน 4 ด้าน'],
     ['sched', '🧊 ภาพ 3D + ตารางประตู–หน้าต่าง + พื้นที่ห้อง'], ['list', '📋 รายการเฟอร์นิเจอร์'],
-    ['site', '🌳 ผังบริเวณ (ที่ดิน ระยะร่น สวน สระ รั้ว)'], ['mep', '⚡ แบบไฟฟ้าและประปา (ถ้าวางจุดไว้)'], ['boq', '🧮 ประมาณการวัสดุและราคา + งวดงาน']];
+    ['site', '🌳 ผังบริเวณ (ที่ดิน ระยะร่น สวน สระ รั้ว)'], ['elec', '⚡ แบบไฟฟ้า: วงจร สวิตช์→ดวงไฟ + ตารางโหลด/มิเตอร์'], ['plumb', '🚿 แบบประปา-สุขาภิบาล: แนวท่อ ถังบำบัด + ตารางสุขภัณฑ์'], ['boq', '🧮 ประมาณการวัสดุและราคา + งวดงาน']];
   const tf = (id, label, v, ph = '') => `<div class="field"><label for="${id}">${label}</label><input class="inp" id="${id}" maxlength="80" value="${esc(v)}" placeholder="${ph}"></div>`;
   openModal('🖨️ พิมพ์แบบบ้าน', `
     <div class="warnbox">⚠️ <b>แบบที่พิมพ์เป็น "แบบร่าง" สำหรับคุยกับช่างและผู้ออกแบบ</b> — มีมาตราส่วนจริง ขนาดห้อง ตำแหน่งประตู–หน้าต่าง และรูปด้าน
@@ -10279,7 +10925,7 @@ function appendOtherHousesSheets(html, o) {
   const home = state.houseId, keepLv = curLevel, keepSel = sel, cam = { p: perspCam.position.clone(), t: orbit.target.clone() };
   const extra = [];
   const opt = { ...o, site: false, boq: false };
-  if (!['plan', 'furn', 'mep', 'elev', 'sched', 'list'].some(k => opt[k])) return html;
+  if (!['plan', 'furn', 'elec', 'plumb', 'elev', 'sched', 'list'].some(k => opt[k])) return html;
   try {
     for (const h of [...state.others]) {
       activateHouse(h.id, { silent: true });
@@ -11262,6 +11908,8 @@ const MANUAL = [
       <tr><td><b>⇕ แยกชั้น</b></td><td>ยกชั้นบนลอยขึ้น (มีภาพเคลื่อนไหว) ให้เห็นทุกชั้นพร้อมกัน • ระหว่างแยกชั้นเป็นการดูอย่างเดียว กด <b>⇣ รวมชั้น</b> เพื่อกลับมาแก้ไข</td></tr>
       <tr><td><b>📐 แปลน → สมจริง</b></td><td>ในโหมดแปลน เลือก <b>แบบแปลน: สมจริง</b> → มองจากด้านบนเหมือนภาพถ่าย เห็นพื้นไม้ กระเบื้อง เฟอร์นิเจอร์ (ซ่อนดวงไฟเพดาน/แอร์ที่บังพื้น)</td></tr>
       <tr><td><b>📐 แปลน → ขาว-ดำ</b></td><td>แปลนลายเส้นแบบสถาปนิก ผนังดำทึบ ของเป็นเส้นขอบ ต้นไม้เป็นวงกลม <b>มีเส้นบอกขนาด 3 แถวรอบบ้าน</b> (ช่องประตู/หน้าต่าง • ขนาดแต่ละห้อง • ขนาดรวม) และขนาดกว้าง×ยาวในป้ายชื่อห้อง • ยังลาก/แก้ไขได้ตามปกติ • <b>ปกติ</b> = แปลนสำหรับแก้ไข (มีกริด)</td></tr>
+      <tr><td><b>📏 ป้ายความสูง</b></td><td>ในแปลน <b>ขาว-ดำ</b> กด <b>📏 ความสูง</b> → ป้ายสีบอกระดับจากพื้นห้อง (เมตร): หน้าต่าง <b>0.90–2.00</b> (ขอบล่าง–ขอบบน) • ประตู <b>ส.2.10</b> • ปลั๊ก <b>+0.30</b> • สวิตช์ <b>+1.20</b> • แอร์ ตู้ไฟ เครื่องทำน้ำอุ่น • ปุ่ม <b>⚙️</b> = เลือกชนิดป้าย และ <b>📋 ตารางความสูง</b> (พิมพ์ให้ช่างพร้อมรูปตัดผนัง) • คลิกป้าย = เลือกของชิ้นนั้นแล้วแก้ "ความสูงจากพื้น" ได้ • รายงานลูกค้าเลือกใส่หน้า "แปลนป้ายความสูง + ตาราง" ได้</td></tr>
+      <tr><td><b>📦 โมเดล 3D (.glb)</b></td><td>ปุ่ม <b>📦 3D (.glb)</b> บนแถบนี้ หรือ <b>📁 ไฟล์ → โมเดล 3D</b> → ได้ไฟล์ 3D มาตรฐาน ส่ง LINE ให้ลูกค้าเปิดดูในมือถือ (Android วางบนโต๊ะแบบ AR ได้) หรือเปิดใน Windows 3D Viewer / SketchUp / Blender • เลือกได้: ทั้งบ้าน+ที่ดิน / เฉพาะตัวบ้าน / เฉพาะชั้นนี้ • หลังคา เฟอร์นิเจอร์ ต้นไม้ • ความละเอียดลาย (เล็ก = ไฟล์เล็กสำหรับส่ง LINE) — ไฟล์นี้เปิดกลับมาแก้ในแอปไม่ได้ ใช้ 💾 .json สำหรับแก้ต่อ</td></tr>
       <tr><td><b>✂️ แบบตัด</b></td><td><b>เหลือ 1 ม.</b> = ผนังด้านที่ตัดเหลือสูง 1 เมตร เห็นหน้าตัดผนังสีไม้ (เหมือนบ้านจำลอง) • <b>ยกออก</b> = เอาผนังด้านนั้นออกทั้งแผง</td></tr>
       <tr><td><b>✨ เงานุ่ม</b></td><td>เงาตามมุมห้อง ใต้เฟอร์นิเจอร์ และรอยต่อผนังกับพื้น ให้ภาพมีมิติ (ใช้ในบ้านตุ๊กตาและแปลนสมจริง) — ถ้าเครื่องช้า กดปิดได้</td></tr>
       <tr><td><b>🖼️ ภาพนำเสนอ</b></td><td>บันทึกภาพความละเอียดสูงในกรอบการ์ด มีชื่อโครงการ จำนวนชั้น/ห้อง พื้นที่ และงบประมาณ — พร้อมส่งลูกค้า • <b>📷 PNG</b> = ภาพธรรมดาไม่มีกรอบ</td></tr>
@@ -11308,6 +11956,7 @@ const MANUAL = [
       <li><b>พื้นและผนัง</b>: เลือกวัสดุพื้น วัสดุผนัง สี และผนังเด่นได้ทีละห้อง (ดูหัวข้อด้านล่าง)</li>
       <li><b>ขนาดบ้าน ผนัง</b>: ที่ "ตั้งค่าบ้าน" ปรับกว้าง/ยาว ความสูงและความหนาผนัง วัสดุผนัง (สีทา ปูนเปลือย อิฐโชว์แนว ไม้ระแนง)</li>
       <li><b>⚡ วางจุดไฟฟ้า-ประปาอัตโนมัติ</b>: ใส่ดวงไฟ สวิตช์ ปลั๊ก แอร์ ท่อน้ำ ตามประเภทห้อง</li>
+      <li><b>🚽 วางถังบำบัด บ่อพัก ถังน้ำ อัตโนมัติ</b> (ชั้น 1): วางถังบำบัด บ่อพัก บ่อดักไขมัน (ถ้ามีครัว) และถังน้ำ+ปั๊ม นอกบ้านด้านที่ใกล้ห้องน้ำ — ขนาดคิดจากจำนวนห้องนอน</li>
       <li><b>รูปแปลนเดิม</b>: หัวข้อ "รูปแปลนเดิม" กด 📷 นำเข้ารูป แล้ว 📏 ตั้งมาตราส่วน — ใช้วาดตามแบบที่มีอยู่</li></ul>
     <h4>ลากปรับขนาดห้อง</h4>
     ${FIG('roomdrag', 'ห้องที่เลือกมีจุดสีน้ำเงิน: วงกลม = มุม (ยืด 2 ด้าน) • แท่ง = ขอบ (เลื่อนผนังด้านนั้น)')}
@@ -11400,7 +12049,10 @@ const MANUAL = [
     ${FIG('estimate', 'หน้าประมาณวัสดุและราคาก่อสร้าง: เลือกวัสดุ ค่าแรง แล้วดูราคารวมและคำแนะนำประหยัดงบ')}
     <ul><li><b>🧮 ประมาณราคา</b> — คำนวณเสาเข็ม ฐานราก เหล็ก ปูน หิน ทราย อิฐ หลังคา สี กระเบื้อง ประตูหน้าต่าง งานระบบ งานรอบบ้าน + ค่าแรง แบ่งงวดจ่ายเงินให้ • แก้ราคาต่อหน่วยและภูมิภาคเองได้</li>
       <li><b>🛒 ซื้อของ</b> — พิมพ์ใบรายการซื้อของแบบมีช่องติ๊ก ถือไปร้านวัสดุได้</li>
-      <li><b>🖨️ พิมพ์แบบ</b> (${K('Ctrl', 'P')}) — แปลนพร้อมเส้นบอกขนาด แปลนเฟอร์นิเจอร์ รูปด้าน 4 ด้าน ตารางประตู–หน้าต่าง • ตอนพิมพ์ตั้ง <b>ขนาดจริง / 100%</b> มาตราส่วนจึงถูกต้อง • เลือก "บันทึกเป็น PDF" เพื่อส่งไฟล์</li>
+      <li><b>🖨️ พิมพ์แบบ</b> (${K('Ctrl', 'P')}) — แปลนพร้อมเส้นบอกขนาด แปลนเฟอร์นิเจอร์ รูปด้าน 4 ด้าน ตารางประตู–หน้าต่าง •
+        <b>⚡ แบบไฟฟ้า</b> (เส้นสวิตช์→ดวงไฟ วงจร C1, C2… กลับตู้ไฟ จำนวนจุดต่อห้อง) • <b>🚿 แบบประปา-สุขาภิบาล</b> (ท่อน้ำดี/น้ำร้อน/น้ำทิ้ง/โสโครก ถังบำบัด บ่อพัก บ่อดักไขมัน ขนาดท่อ) •
+        แผ่น <b>ตารางไฟฟ้า-ประปา</b>: ตารางวงจร/โหลด ขนาดมิเตอร์ เบรกเกอร์ สาย + ตารางสุขภัณฑ์ ขนาดถัง และ <b>ตรวจจุดที่ขาด</b> (ห้องนอนไม่มีปลั๊ก ไฟไม่มีสวิตช์ ห้องน้ำไม่มีท่อพื้น ฯลฯ) •
+        อยากจัดวงจรเอง: เลือกปลั๊ก/ดวงไฟ แล้วตั้ง <b>ชื่อกลุ่มวงจร</b> ในแผงขวา • ตอนพิมพ์ตั้ง <b>ขนาดจริง / 100%</b> มาตราส่วนจึงถูกต้อง • เลือก "บันทึกเป็น PDF" เพื่อส่งไฟล์</li>
       <li><b>🖼️ ภาพ PNG</b> — บันทึกภาพมุมที่เห็นอยู่ • <b>🔗 แชร์</b> — ได้ลิงก์ให้คนอื่นเปิดดูแบบนี้</li>
       <li><b>📑 บันทึก / เปรียบเทียบหลายแบบ</b> — เก็บแบบไว้หลายเวอร์ชันแล้วเทียบกัน</li>
       <li><b>📑 รายงาน</b> (แถบบน) — <b>รายงานลูกค้า A4 ไฟล์เดียว</b>: ปกภาพบ้านตุ๊กตา + ข้อมูลสรุป • ภาพแยกชั้น/มองจากด้านบน + ตารางห้องและวัสดุ • แปลนทุกชั้นพร้อมเส้นบอกขนาด • BOQ และงวดงาน — กด "พิมพ์ / บันทึกเป็น PDF" แล้วส่งลูกค้าหรือผู้รับเหมาได้เลย</li></ul>
@@ -11720,6 +12372,7 @@ $('#b_save').onclick = saveJSON;
 $('#b_png').onclick = exportPNG;
 $('#b_print').onclick = showPrintDialog;
 $('#b_report').onclick = showReportDialog;
+$('#b_glb').onclick = showGlbDialog;
 $('#b_est').onclick = showEstimate;
 $('#t_measure').onclick = startMeasure;
 $('#t_drop').onclick = startDrop;
